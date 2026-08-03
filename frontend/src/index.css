@@ -1,0 +1,4 @@
+/* Tailwind CSS v4 — this single import replaces the old three-directive
+   setup (@tailwind base/components/utilities) AND the tailwind.config.js
+   file. Theme customization now lives in CSS via @theme blocks. */
+@import "tailwindcss";
