@@ -1,0 +1,25 @@
+{
+  "compilerOptions": {
+    // Target modern Node — Node 22 supports all of ES2022 natively
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+
+    // Strict mode catches bugs at compile time instead of runtime.
+    // Non-negotiable for a project you'll demo in interviews.
+    "strict": true,
+
+    // Lets us `import express from "express"` even though express
+    // is an older CommonJS package
+    "esModuleInterop": true,
+
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+
+    // tsx runs .ts files directly, so we don't emit compiled JS in dev
+    "noEmit": true,
+
+    "types": ["node"]
+  },
+  "include": ["src/**/*"]
+}
