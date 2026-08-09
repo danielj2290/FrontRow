@@ -16,7 +16,9 @@ node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-package-lock.json
+# package-lock.json is intentionally NOT ignored. This is an application, not a
+# published library, so we want every machine — laptop, EC2, CI — installing the
+# exact same dependency versions. Ignoring it also breaks `npm ci`.
 
 # ======================
 # BUILD OUTPUT
