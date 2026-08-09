@@ -76,6 +76,8 @@ logs/
 # ======================
 uploads/
 
-Internal Documentation/
+# Renamed from "Internal Documentation/" — folder names with spaces break shell
+# scripts and CI paths. Keeping the ignore so planning docs stay private for now.
+internal-docs/
 claude.md
 

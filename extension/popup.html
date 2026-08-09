@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="stylesheet" href="styles.css" />
+    <title>Front Row</title>
+  </head>
+  <body>
+    <h1>Front Row <span aria-hidden="true">🎤</span></h1>
+
+    <!-- Filled automatically by content.js when it can read the page.
+         Stays editable so the user can correct a bad auto-read. -->
+    <label for="event">Event</label>
+    <input id="event" type="text" placeholder="Event name" />
+
+    <label for="price">Get-in price (USD)</label>
+    <input id="price" type="number" min="1" step="0.01" placeholder="0.00" />
+
+    <button id="submit">Submit price</button>
+
+    <!-- Success and error messages both render here -->
+    <p id="status" role="status"></p>
+
+    <script src="popup.js"></script>
+  </body>
+</html>

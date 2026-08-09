@@ -1,0 +1,36 @@
+{
+  "manifest_version": 3,
+  "name": "Front Row — Price Submitter",
+  "version": "0.1.0",
+  "description": "Submit ticket get-in prices to Front Row from any ticket marketplace.",
+
+  "permissions": ["activeTab", "storage"],
+
+  "host_permissions": [
+    "https://*.stubhub.com/*",
+    "https://*.seatgeek.com/*",
+    "https://*.ticketmaster.com/*",
+    "https://*.vividseats.com/*"
+  ],
+
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Submit price to Front Row"
+  },
+
+  "background": {
+    "service_worker": "background.js"
+  },
+
+  "content_scripts": [
+    {
+      "matches": [
+        "https://*.stubhub.com/*",
+        "https://*.seatgeek.com/*",
+        "https://*.ticketmaster.com/*",
+        "https://*.vividseats.com/*"
+      ],
+      "js": ["content.js"]
+    }
+  ]
+}
