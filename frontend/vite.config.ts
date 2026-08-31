@@ -11,7 +11,7 @@ export default defineConfig({
     // both apps will sit behind the same domain anyway — this proxy makes
     // dev behave like production.
     proxy: {
-      '/api': 'http://localhost:3000', // must match PORT in the root .env
+      '/api': 'http://3.137.22.130:3000', // EC2 — the API keys live only on the server
     },
   },
 })

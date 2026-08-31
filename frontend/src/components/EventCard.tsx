@@ -1,3 +1,4 @@
+import { Link } from "react-router";
 import type { EventSummary } from "../types/event.ts";
 import { formatEventDate, formatEventTime, formatPrice, formatVenue } from "../utils/format.ts";
 
@@ -6,50 +7,58 @@ export function EventCard({ event }: { event: EventSummary }) {
   const time = formatEventTime(event.eventDate);
 
   return (
-    <article className="overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900/60 transition-colors hover:border-zinc-700">
-      {/* Fixed aspect ratio so cards line up in a grid even while images load
-          or when an event has no photo at all. */}
-      <div className="aspect-video bg-zinc-800">
+    <Link
+      to={`/event/${event.id}`}
+      className="group block bg-zinc-950 transition-colors hover:bg-zinc-900"
+    >
+      {/* Fixed aspect ratio so cards align in a grid even while images load or
+          when an event has no photo at all. */}
+      <div className="aspect-video overflow-hidden bg-zinc-900">
         {event.imageUrl ? (
           <img
             src={event.imageUrl}
             alt={event.artist ?? event.title}
             loading="lazy"
-            className="h-full w-full object-cover"
+            className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
           />
         ) : (
-          <div className="flex h-full items-center justify-center text-3xl" aria-hidden>
-            🎤
+          // Text placeholder rather than an icon — it tells you WHICH event has
+          // no photo, which an icon cannot.
+          <div className="flex h-full items-center justify-center px-4">
+            <span className="line-clamp-2 text-center text-sm font-medium uppercase tracking-widest text-zinc-700">
+              {event.artist ?? event.title}
+            </span>
           </div>
         )}
       </div>
 
       <div className="p-4">
-        <p className="text-xs font-medium uppercase tracking-wide text-green-400">
+        <p className="text-xs font-semibold uppercase tracking-wider text-green-400">
           {formatEventDate(event.eventDate)}
-          {time ? ` · ${time}` : ""}
+          {time ? ` \u00b7 ${time}` : ""}
         </p>
 
-        <h3 className="mt-1.5 line-clamp-2 text-base font-semibold text-zinc-50">
+        <h3 className="mt-2 line-clamp-2 text-base font-semibold leading-snug text-zinc-50">
           {event.title}
         </h3>
 
         <p className="mt-1 line-clamp-1 text-sm text-zinc-400">{formatVenue(event.venue)}</p>
 
-        <div className="mt-3 flex items-baseline justify-between border-t border-zinc-800 pt-3">
+        <div className="mt-4 flex items-baseline justify-between border-t border-zinc-800 pt-3">
           {price ? (
             <>
-              <span className="text-xs text-zinc-500">Get-in price</span>
+              <span className="text-xs uppercase tracking-wide text-zinc-500">Get-in</span>
               <span className="text-lg font-bold text-zinc-50">{price}</span>
             </>
           ) : (
-            // Honest empty state rather than "$0" or a dash. Resale pricing is
-            // gated behind partner API access, so this stays blank until the
-            // Week 3 bot starts writing snapshots.
-            <span className="text-xs text-zinc-500">Price tracking starts soon</span>
+            // Honest placeholder rather than $0 or a dash. Resale pricing is
+            // gated until the Week 3 bot starts writing snapshots.
+            <span className="text-xs uppercase tracking-wide text-zinc-600">
+              Price tracking soon
+            </span>
           )}
         </div>
       </div>
-    </article>
+    </Link>
   );
 }

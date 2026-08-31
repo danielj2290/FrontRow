@@ -1,7 +1,6 @@
-// Mirror of the EventSummary interface the backend returns from /api/events.
-// Kept as a hand-written copy rather than shared code because the frontend and
-// backend are separate npm projects with no build step between them. If the API
-// shape changes, this file changes with it.
+// Mirror of the shapes the backend returns. Kept as a hand-written copy rather
+// than shared code because the frontend and backend are separate npm projects
+// with no build step between them. If the API changes, this file changes too.
 export interface EventSummary {
   id: string;
   title: string;
@@ -17,5 +16,14 @@ export interface EventSummary {
 
 export interface EventSearchResponse {
   count: number;
+  events: EventSummary[];
+}
+
+export interface ArtistProfile {
+  name: string;
+  imageUrl: string | null;
+  genres: string[];
+  popularity: number | null;
+  setlistFmUrl: string;
   events: EventSummary[];
 }

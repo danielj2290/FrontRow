@@ -17,7 +17,13 @@
 // fills this in from the price_snapshots table instead. The field exists now
 // so the frontend card can be built against its final shape.
 
-import { searchEvents } from "./seatgeek.js";
+import {
+  searchEvents,
+  getEventById,
+  searchPerformer,
+  type SeatGeekEvent,
+} from "./seatgeek.js";
+import { searchArtist } from "./spotify.js";
 import { discoverEvents, type TicketmasterEvent } from "./ticketmaster.js";
 
 // The single shape every event-related page consumes. Kept deliberately flat —
@@ -103,12 +109,18 @@ function earliestPresaleDate(event: TicketmasterEvent): string | null {
 export async function searchConcerts(options: {
   artist?: string;
   city?: string;
+  genre?: string;
   limit?: number;
 }): Promise<EventSummary[]> {
   const limit = options.limit ?? 20;
 
   const [seatGeekResult, ticketmasterResult] = await Promise.allSettled([
-    searchEvents({ artist: options.artist, city: options.city, perPage: limit }),
+    searchEvents({
+      artist: options.artist,
+      city: options.city,
+      genre: options.genre,
+      perPage: limit,
+    }),
     discoverEvents({ keyword: options.artist, city: options.city, size: limit }),
   ]);
 
@@ -136,23 +148,85 @@ export async function searchConcerts(options: {
     const candidates = ticketmasterIndex.get(`${datePart}|${normalize(event.venue.city)}`);
     const matched = candidates ? matchTicketmasterEvent(candidates, event.title) : undefined;
 
-    // The first performer is the headliner on every SeatGeek concert response.
-    const headliner = event.performers?.[0];
-
-    return {
-      id: `sg-${event.id}`,
-      title: event.title,
-      artist: headliner?.name ?? null,
-      imageUrl: headliner?.image ?? null,
-      eventDate: event.datetime_local,
-      venue: {
-        name: event.venue.name,
-        city: event.venue.city,
-        state: event.venue.state ?? null,
-      },
-      getInPrice: event.stats?.lowest_price ?? null,
-      onSaleDate: matched?.sales?.public?.startDateTime ?? null,
-      presaleDate: matched ? earliestPresaleDate(matched) : null,
-    };
+    return toEventSummary(event, matched);
   });
+}
+
+// Shared normaliser. Search results and the single-event endpoint both go
+// through it so the frontend only ever renders one shape.
+export function toEventSummary(event: SeatGeekEvent, matched?: TicketmasterEvent): EventSummary {
+  // The first performer is the headliner on every SeatGeek concert response.
+  const headliner = event.performers?.[0];
+
+  return {
+    id: `sg-${event.id}`,
+    title: event.title,
+    artist: headliner?.name ?? null,
+    imageUrl: headliner?.image ?? null,
+    eventDate: event.datetime_local,
+    venue: {
+      name: event.venue.name,
+      city: event.venue.city,
+      state: event.venue.state ?? null,
+    },
+    getInPrice: event.stats?.lowest_price ?? null,
+    onSaleDate: matched?.sales?.public?.startDateTime ?? null,
+    presaleDate: matched ? earliestPresaleDate(matched) : null,
+  };
+}
+
+/**
+ * One event by id. Returns null when SeatGeek has no such event so the route
+ * can answer 404 rather than 500.
+ *
+ * No Ticketmaster enrichment here: matching a SINGLE event against a keyword
+ * search would be a coin flip, and a wrong on-sale date is worse than none.
+ */
+export async function getEventDetail(id: number): Promise<EventSummary | null> {
+  const event = await getEventById(id);
+  return event ? toEventSummary(event) : null;
+}
+
+export interface ArtistProfile {
+  name: string;
+  imageUrl: string | null;
+  genres: string[];
+  popularity: number | null;
+  setlistFmUrl: string;
+  events: EventSummary[];
+}
+
+/**
+ * Everything the artist page needs, from three sources at once.
+ *
+ * Spotify supplies the photo (its images are much higher resolution than
+ * SeatGeek's), SeatGeek supplies the genres — Spotify stopped returning them
+ * for apps created after Nov 2024, see the note in spotify.ts — and the event
+ * search supplies upcoming shows.
+ *
+ * Any of the three can fail without taking down the page: a missing photo or
+ * genre list is a cosmetic gap, not an error worth showing the user.
+ */
+export async function getArtistProfile(name: string): Promise<ArtistProfile> {
+  const [performerResult, spotifyResult, eventsResult] = await Promise.allSettled([
+    searchPerformer(name),
+    searchArtist(name),
+    searchConcerts({ artist: name, limit: 24 }),
+  ]);
+
+  const performer = performerResult.status === "fulfilled" ? performerResult.value : null;
+  const spotify = spotifyResult.status === "fulfilled" ? spotifyResult.value : null;
+  const events = eventsResult.status === "fulfilled" ? eventsResult.value : [];
+
+  // Prefer whichever source actually knows the artist's proper casing.
+  const resolvedName = spotify?.name ?? performer?.name ?? name;
+
+  return {
+    name: resolvedName,
+    imageUrl: spotify?.images?.[0]?.url ?? performer?.image ?? null,
+    genres: performer?.genres?.map((genre) => genre.name) ?? [],
+    popularity: spotify?.popularity ?? null,
+    setlistFmUrl: `https://www.setlist.fm/search?query=${encodeURIComponent(resolvedName)}`,
+    events,
+  };
 }

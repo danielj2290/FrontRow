@@ -43,12 +43,13 @@ interface SeatGeekResponse {
 }
 
 /**
- * Search concert events by artist name and/or city.
+ * Search concert events by artist name, city, and/or performer genre slug.
  * Maps to the Week 1 checklist item: "search events by artist/city".
  */
 export async function searchEvents(options: {
   artist?: string;
   city?: string;
+  genre?: string;
   perPage?: number;
 }): Promise<SeatGeekResponse> {
   const params = new URLSearchParams({
@@ -61,10 +62,63 @@ export async function searchEvents(options: {
   // "q" does fuzzy text search across performer names
   if (options.artist) params.set("q", options.artist);
   if (options.city) params.set("venue.city", options.city);
+  // SeatGeek indexes genre on the PERFORMER, not the event. Spotify stopped
+  // returning genres for new apps (see spotify.ts), so this is our genre source.
+  if (options.genre) params.set("performers.genres.slug", options.genre);
 
   const res = await fetch(`${BASE_URL}/events?${params}`);
   if (!res.ok) {
     throw new Error(`SeatGeek API error: ${res.status} ${res.statusText}`);
   }
   return (await res.json()) as SeatGeekResponse;
+}
+
+/**
+ * Fetch one event by its SeatGeek numeric id.
+ * Returns null on 404 so callers can send a clean 404 instead of a 500.
+ */
+export async function getEventById(id: number): Promise<SeatGeekEvent | null> {
+  const params = new URLSearchParams({
+    client_id: requireEnv("SEATGEEK_CLIENT_ID"),
+    client_secret: requireEnv("SEATGEEK_CLIENT_SECRET"),
+  });
+
+  const res = await fetch(`${BASE_URL}/events/${id}?${params}`);
+  if (res.status === 404) return null;
+  if (!res.ok) {
+    throw new Error(`SeatGeek API error: ${res.status} ${res.statusText}`);
+  }
+
+  // The single-event endpoint returns the event object directly, not wrapped
+  // in an { events: [...] } envelope like the search endpoint does.
+  return (await res.json()) as SeatGeekEvent;
+}
+
+export interface SeatGeekPerformer {
+  id: number;
+  name: string;
+  image: string | null;
+  genres?: { name: string; slug: string; primary?: boolean }[];
+}
+
+/**
+ * Look up a performer by name. This is where artist GENRES come from —
+ * Spotify no longer returns them for apps created after Nov 2024.
+ */
+export async function searchPerformer(name: string): Promise<SeatGeekPerformer | null> {
+  const params = new URLSearchParams({
+    client_id: requireEnv("SEATGEEK_CLIENT_ID"),
+    client_secret: requireEnv("SEATGEEK_CLIENT_SECRET"),
+    q: name,
+    "taxonomies.name": "concert",
+    per_page: "1",
+  });
+
+  const res = await fetch(`${BASE_URL}/performers?${params}`);
+  if (!res.ok) {
+    throw new Error(`SeatGeek API error: ${res.status} ${res.statusText}`);
+  }
+
+  const data = (await res.json()) as { performers: SeatGeekPerformer[] };
+  return data.performers[0] ?? null;
 }

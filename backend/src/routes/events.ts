@@ -6,7 +6,7 @@
 // All the provider logic lives in services/eventSearch.ts.
 
 import { Router } from "express";
-import { searchConcerts } from "../services/eventSearch.js";
+import { searchConcerts, getEventDetail } from "../services/eventSearch.js";
 
 const router = Router();
 
@@ -39,6 +39,7 @@ function parseText(raw: unknown): string | undefined {
 router.get("/", async (req, res) => {
   const artist = parseText(req.query.artist);
   const city = parseText(req.query.city);
+  const genre = parseText(req.query.genre);
   const limit = parseLimit(req.query.limit);
 
   if (!artist && !city) {
@@ -48,12 +49,37 @@ router.get("/", async (req, res) => {
   }
 
   try {
-    const events = await searchConcerts({ artist, city, limit });
+    const events = await searchConcerts({ artist, city, genre, limit });
     res.json({ count: events.length, events });
   } catch (error) {
     // 502, not 500: our server is fine, the upstream provider is what failed.
     // Log the real reason server-side; never leak provider internals to the client.
     console.error("GET /api/events failed:", error);
+    res.status(502).json({ error: "Event provider unavailable. Please try again shortly." });
+  }
+});
+
+/**
+ * GET /api/events/:id
+ *
+ * ids are prefixed with their provider ("sg-17871645") so the frontend never
+ * has to care which API a result came from, and so a future Ticketmaster-backed
+ * id cannot collide with a SeatGeek one.
+ */
+router.get("/:id", async (req, res) => {
+  const match = /^sg-(\d+)$/.exec(req.params.id);
+  if (!match) {
+    return res.status(400).json({ error: "Unrecognised event id." });
+  }
+
+  try {
+    const event = await getEventDetail(Number(match[1]));
+    if (!event) {
+      return res.status(404).json({ error: "Event not found." });
+    }
+    res.json(event);
+  } catch (error) {
+    console.error(`GET /api/events/${req.params.id} failed:`, error);
     res.status(502).json({ error: "Event provider unavailable. Please try again shortly." });
   }
 });

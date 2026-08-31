@@ -2,3 +2,33 @@
    setup (@tailwind base/components/utilities) AND the tailwind.config.js
    file. Theme customization now lives in CSS via @theme blocks. */
 @import "tailwindcss";
+
+@theme {
+  /* Inter everywhere. The fallback stack matters: if the Google Fonts request
+     fails the page still renders in the platform's own UI face rather than
+     dropping to Times New Roman. */
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    Roboto, Helvetica, Arial, sans-serif;
+
+  /* DESIGN RULE: no rounded corners anywhere. Zeroing the radius scale at the
+     theme level means a stray `rounded-lg` in a component is a no-op rather
+     than a visual inconsistency someone has to spot in review. */
+  --radius-xs: 0px;
+  --radius-sm: 0px;
+  --radius-md: 0px;
+  --radius-lg: 0px;
+  --radius-xl: 0px;
+  --radius-2xl: 0px;
+  --radius-3xl: 0px;
+  --radius-4xl: 0px;
+}
+
+@layer base {
+  html {
+    font-family: var(--font-sans);
+    /* Inter ships with these on by default in its variable build; enabling
+       them explicitly keeps rendering consistent across browsers. */
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    -webkit-font-smoothing: antialiased;
+  }
+}
