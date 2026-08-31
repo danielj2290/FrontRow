@@ -7,6 +7,7 @@
 
 import { Router } from "express";
 import { searchConcerts, getEventDetail } from "../services/eventSearch.js";
+import { UnknownGenreError } from "../services/genres.js";
 
 const router = Router();
 
@@ -52,6 +53,11 @@ router.get("/", async (req, res) => {
     const events = await searchConcerts({ artist, city, genre, limit });
     res.json({ count: events.length, events });
   } catch (error) {
+    // A bad genre slug is the caller's mistake, not an upstream outage.
+    if (error instanceof UnknownGenreError) {
+      return res.status(400).json({ error: error.message });
+    }
+
     // 502, not 500: our server is fine, the upstream provider is what failed.
     // Log the real reason server-side; never leak provider internals to the client.
     console.error("GET /api/events failed:", error);

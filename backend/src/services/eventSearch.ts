@@ -24,6 +24,7 @@ import {
   type SeatGeekEvent,
 } from "./seatgeek.js";
 import { searchArtist } from "./spotify.js";
+import { findBrowseGenre, UnknownGenreError } from "./genres.js";
 import {
   discoverEvents,
   getTicketmasterEventById,
@@ -287,7 +288,16 @@ async function searchByGenre(
   city: string | undefined,
   limit: number
 ): Promise<EventSummary[]> {
-  const response = await discoverEvents({ genre, city, size: limit });
+  // An unknown slug means a bad url, not an empty genre — say so loudly rather
+  // than firing a request that would return nothing and look like no results.
+  const browseGenre = findBrowseGenre(genre);
+  if (!browseGenre) throw new UnknownGenreError(genre);
+
+  const response = await discoverEvents({
+    genreId: browseGenre.ticketmasterGenreId,
+    city,
+    size: limit,
+  });
   const events = response._embedded?.events ?? [];
 
   return events

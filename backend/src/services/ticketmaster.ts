@@ -53,13 +53,14 @@ interface TicketmasterResponse {
 /**
  * Discover music events by keyword (artist name), city, and/or genre.
  *
- * `classificationName` matches a segment, genre, sub-genre, type or sub-type by
- * name, so passing "Rock" or "Hip-Hop/Rap" filters to that genre directly.
+ * genreId is an EXACT match on one classification node. classificationName was
+ * rejected because it matches any level by name, so "Rock" also drags in
+ * sub-genres like "Alternative Rock".
  */
 export async function discoverEvents(options: {
   keyword?: string;
   city?: string;
-  genre?: string;
+  genreId?: string;
   size?: number;
 }): Promise<TicketmasterResponse> {
   const params = new URLSearchParams({
@@ -74,7 +75,7 @@ export async function discoverEvents(options: {
 
   if (options.keyword) params.set("keyword", options.keyword);
   if (options.city) params.set("city", options.city);
-  if (options.genre) params.set("classificationName", options.genre);
+  if (options.genreId) params.set("genreId", options.genreId);
 
   const res = await fetch(`${BASE_URL}/events.json?${params}`);
   if (!res.ok) {
