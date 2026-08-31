@@ -42,9 +42,9 @@ router.get("/", async (req, res) => {
   const genre = parseText(req.query.genre);
   const limit = parseLimit(req.query.limit);
 
-  if (!artist && !city) {
+  if (!artist && !city && !genre) {
     return res.status(400).json({
-      error: "Provide at least one of ?artist= or ?city=",
+      error: "Provide at least one of ?artist=, ?city= or ?genre=",
     });
   }
 
