@@ -29,6 +29,7 @@ import {
   discoverEvents,
   getTicketmasterEventById,
   pickImage,
+  toTicketmasterDate,
   extractGenres as extractTicketmasterGenres,
   type TicketmasterEvent,
 } from "./ticketmaster.js";
@@ -293,10 +294,26 @@ async function searchByGenre(
   const browseGenre = findBrowseGenre(genre);
   if (!browseGenre) throw new UnknownGenreError(genre);
 
+  // Browsing a genre means "show me what is worth going to", not "show me the
+  // chronologically next thing". Sorted by date the list fills with tiny local
+  // shows happening this week; relevance is Ticketmaster's own prominence
+  // ranking, which surfaces the acts people actually search a genre to find.
+  const now = new Date();
+  const threeMonthsOut = new Date(now);
+  threeMonthsOut.setMonth(threeMonthsOut.getMonth() + 3);
+
   const response = await discoverEvents({
     genreId: browseGenre.ticketmasterGenreId,
     city,
     size: limit,
+    sort: "relevance,desc",
+    // Without an explicit window Ticketmaster happily returns dates years out,
+    // which is not a browsing horizon anyone thinks in.
+    startDateTime: toTicketmasterDate(now),
+    endDateTime: toTicketmasterDate(threeMonthsOut),
+    // SeatGeek is US-only, so a UK club night in these results is noise the
+    // rest of the app cannot even price.
+    countryCode: "US",
   });
   const events = response._embedded?.events ?? [];
 

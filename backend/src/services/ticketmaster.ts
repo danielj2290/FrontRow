@@ -61,12 +61,16 @@ export async function discoverEvents(options: {
   keyword?: string;
   city?: string;
   genreId?: string;
+  startDateTime?: string;
+  endDateTime?: string;
+  countryCode?: string;
+  sort?: string;
   size?: number;
 }): Promise<TicketmasterResponse> {
   const params = new URLSearchParams({
     apikey: requireEnv("TICKETMASTER_CONSUMER_KEY"),
     size: String(options.size ?? 5),
-    sort: "date,asc",
+    sort: options.sort ?? "date,asc",
   });
 
   // segmentName pins us to music even when a genre name is ambiguous across
@@ -76,6 +80,9 @@ export async function discoverEvents(options: {
   if (options.keyword) params.set("keyword", options.keyword);
   if (options.city) params.set("city", options.city);
   if (options.genreId) params.set("genreId", options.genreId);
+  if (options.startDateTime) params.set("startDateTime", options.startDateTime);
+  if (options.endDateTime) params.set("endDateTime", options.endDateTime);
+  if (options.countryCode) params.set("countryCode", options.countryCode);
 
   const res = await fetch(`${BASE_URL}/events.json?${params}`);
   if (!res.ok) {
@@ -134,4 +141,12 @@ export function extractGenres(event: TicketmasterEvent): string[] {
       )
     ),
   ];
+}
+
+/**
+ * Ticketmaster wants YYYY-MM-DDTHH:mm:ssZ with no milliseconds — passing a raw
+ * toISOString() (which includes .000) is rejected.
+ */
+export function toTicketmasterDate(date: Date): string {
+  return `${date.toISOString().split(".")[0]}Z`;
 }
