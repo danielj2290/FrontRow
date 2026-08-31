@@ -179,12 +179,36 @@ export function toEventSummary(event: SeatGeekEvent, matched?: TicketmasterEvent
  * One event by id. Returns null when SeatGeek has no such event so the route
  * can answer 404 rather than 500.
  *
- * No Ticketmaster enrichment here: matching a SINGLE event against a keyword
- * search would be a coin flip, and a wrong on-sale date is worse than none.
+ * Ticketmaster is queried here too, keyed off the artist name SeatGeek just
+ * gave us. Matching is MORE reliable than in search, not less: we know the
+ * exact date, city and headliner, so the shared date+city index usually has a
+ * single obvious candidate. Without this the detail page's on-sale and presale
+ * fields would always read "Not listed", even for events whose search results
+ * clearly show them.
  */
 export async function getEventDetail(id: number): Promise<EventSummary | null> {
   const event = await getEventById(id);
-  return event ? toEventSummary(event) : null;
+  if (!event) return null;
+
+  const headliner = event.performers?.[0]?.name;
+
+  // Best-effort: a Ticketmaster failure costs two supplementary dates, not the
+  // page, so it must never reject the whole request.
+  const [ticketmasterResult] = await Promise.allSettled([
+    discoverEvents({ keyword: headliner ?? event.title, city: event.venue.city, size: 20 }),
+  ]);
+
+  if (ticketmasterResult.status === "rejected") {
+    console.warn("Ticketmaster enrichment failed for event", id, ticketmasterResult.reason);
+    return toEventSummary(event);
+  }
+
+  const index = indexTicketmasterByDateAndCity(ticketmasterResult.value._embedded?.events ?? []);
+  const datePart = event.datetime_local.split("T")[0];
+  const candidates = index.get(`${datePart}|${normalize(event.venue.city)}`);
+  const matched = candidates ? matchTicketmasterEvent(candidates, event.title) : undefined;
+
+  return toEventSummary(event, matched);
 }
 
 export interface ArtistProfile {
