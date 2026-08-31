@@ -18,6 +18,14 @@ app.get("/health", (_req, res) => {
   res.json({ status: "ok", service: "frontrow-backend", time: new Date().toISOString() });
 });
 
+// Same payload as /health, but mounted under /api. This is the path that
+// frontend/vercel.json proxies through to EC2, so hitting /api/health on the
+// deployed site proves the whole chain — browser -> Vercel rewrite -> EC2 —
+// works before any real /api routes exist.
+app.get("/api/health", (_req, res) => {
+  res.json({ status: "ok", service: "frontrow-backend", time: new Date().toISOString() });
+});
+
 app.get("/", (_req, res) => {
   res.json({ message: "Front Row API — hello world 🎤" });
 });
