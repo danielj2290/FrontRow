@@ -10,7 +10,7 @@ export function GenrePage() {
   const genre = findGenreBySlug(slug);
 
   const { status, data, error } = useApi<EventSearchResponse>(
-    genre ? `/api/events?genre=${genre.slug}&limit=24` : null
+    genre ? `/api/events?genre=${encodeURIComponent(genre.tmName)}&limit=24` : null
   );
 
   // An unknown slug is a bad URL, not a failed request — say so rather than

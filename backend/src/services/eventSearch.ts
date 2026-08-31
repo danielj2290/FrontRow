@@ -24,7 +24,13 @@ import {
   type SeatGeekEvent,
 } from "./seatgeek.js";
 import { searchArtist } from "./spotify.js";
-import { discoverEvents, type TicketmasterEvent } from "./ticketmaster.js";
+import {
+  discoverEvents,
+  getTicketmasterEventById,
+  pickImage,
+  extractGenres as extractTicketmasterGenres,
+  type TicketmasterEvent,
+} from "./ticketmaster.js";
 
 // The single shape every event-related page consumes. Kept deliberately flat —
 // the frontend should never have to know which provider a field came from.
@@ -117,11 +123,18 @@ export async function searchConcerts(options: {
 }): Promise<EventSummary[]> {
   const limit = options.limit ?? 20;
 
+  // Genre browse cannot use SeatGeek at all: its taxonomy tree has no music
+  // genres (verified by dumping /taxonomies — the Concerts branch is only
+  // "Concert" and "Music Festivals"). Ticketmaster classifies music properly,
+  // so genre requests are served entirely from there.
+  if (options.genre) {
+    return searchByGenre(options.genre, options.city, limit);
+  }
+
   const [seatGeekResult, ticketmasterResult] = await Promise.allSettled([
     searchEvents({
       artist: options.artist,
       city: options.city,
-      genre: options.genre,
       perPage: limit,
     }),
     discoverEvents({ keyword: options.artist, city: options.city, size: limit }),
@@ -157,16 +170,6 @@ export async function searchConcerts(options: {
 
 // Shared normaliser. Search results and the single-event endpoint both go
 // through it so the frontend only ever renders one shape.
-// Every concert carries the generic "concert" taxonomy; the useful ones are
-// whatever sits alongside it.
-const GENERIC_TAXONOMIES = new Set(["concert", "concerts", "music"]);
-
-function extractGenres(event: SeatGeekEvent): string[] {
-  return (event.taxonomies ?? [])
-    .map((taxonomy) => taxonomy.name)
-    .filter((name) => !GENERIC_TAXONOMIES.has(name.toLowerCase()));
-}
-
 export function toEventSummary(event: SeatGeekEvent, matched?: TicketmasterEvent): EventSummary {
   // The first performer is the headliner on every SeatGeek concert response.
   const headliner = event.performers?.[0];
@@ -182,7 +185,7 @@ export function toEventSummary(event: SeatGeekEvent, matched?: TicketmasterEvent
       city: event.venue.city,
       state: event.venue.state ?? null,
     },
-    genres: extractGenres(event),
+    genres: matched ? extractTicketmasterGenres(matched) : [],
     getInPrice: event.stats?.lowest_price ?? null,
     onSaleDate: matched?.sales?.public?.startDateTime ?? null,
     presaleDate: matched ? earliestPresaleDate(matched) : null,
@@ -190,24 +193,41 @@ export function toEventSummary(event: SeatGeekEvent, matched?: TicketmasterEvent
 }
 
 /**
- * One event by id. Returns null when SeatGeek has no such event so the route
- * can answer 404 rather than 500.
+ * One event by its prefixed id — "sg-17871645" or "tm-G5vYZ4Aa9k".
  *
- * Ticketmaster is queried here too, keyed off the artist name SeatGeek just
- * gave us. Matching is MORE reliable than in search, not less: we know the
- * exact date, city and headliner, so the shared date+city index usually has a
- * single obvious candidate. Without this the detail page's on-sale and presale
- * fields would always read "Not listed", even for events whose search results
- * clearly show them.
+ * Two providers, two id spaces. The prefix is what lets the frontend treat an
+ * event as one thing regardless of where it came from, and it is why genre
+ * results (Ticketmaster) can sit in the same grid as search results (SeatGeek)
+ * and still open a working detail page.
  */
-export async function getEventDetail(id: number): Promise<EventSummary | null> {
+export async function getEventDetail(prefixedId: string): Promise<EventSummary | null> {
+  const seatGeekMatch = /^sg-(\d+)$/.exec(prefixedId);
+  if (seatGeekMatch) return getSeatGeekEventDetail(Number(seatGeekMatch[1]));
+
+  const ticketmasterMatch = /^tm-(.+)$/.exec(prefixedId);
+  if (ticketmasterMatch) {
+    const event = await getTicketmasterEventById(ticketmasterMatch[1]);
+    return event ? toEventSummaryFromTicketmaster(event) : null;
+  }
+
+  return null;
+}
+
+/**
+ * A SeatGeek event, enriched with Ticketmaster's on-sale dates and genres.
+ *
+ * Matching is MORE reliable here than in search, not less: we know the exact
+ * headliner, date and city, so the shared date+city index usually has a single
+ * obvious candidate.
+ */
+async function getSeatGeekEventDetail(id: number): Promise<EventSummary | null> {
   const event = await getEventById(id);
   if (!event) return null;
 
   const headliner = event.performers?.[0]?.name;
 
-  // Best-effort: a Ticketmaster failure costs two supplementary dates, not the
-  // page, so it must never reject the whole request.
+  // Best-effort: a Ticketmaster failure costs two dates and the genre chips,
+  // not the page.
   const [ticketmasterResult] = await Promise.allSettled([
     discoverEvents({ keyword: headliner ?? event.title, city: event.venue.city, size: 20 }),
   ]);
@@ -223,6 +243,56 @@ export async function getEventDetail(id: number): Promise<EventSummary | null> {
   const matched = candidates ? matchTicketmasterEvent(candidates, event.title) : undefined;
 
   return toEventSummary(event, matched);
+}
+
+/**
+ * Normalise a Ticketmaster event into the same shape SeatGeek events produce,
+ * so genre browse results render through the identical card component.
+ */
+export function toEventSummaryFromTicketmaster(event: TicketmasterEvent): EventSummary {
+  const venue = event._embedded?.venues?.[0];
+
+  // Ticketmaster splits date and time; SeatGeek returns them joined, and the
+  // frontend formatter expects the joined form.
+  const localTime = event.dates.start.localTime ?? "00:00:00";
+
+  return {
+    id: `tm-${event.id}`,
+    title: event.name,
+    artist: event._embedded?.attractions?.[0]?.name ?? null,
+    imageUrl: pickImage(event),
+    eventDate: `${event.dates.start.localDate}T${localTime}`,
+    venue: {
+      name: venue?.name ?? "Venue TBA",
+      city: venue?.city?.name ?? "",
+      state: venue?.state?.stateCode ?? null,
+    },
+    genres: extractTicketmasterGenres(event),
+    // priceRanges is usually absent on resale-heavy events, but when it IS
+    // present this is a real face-value number rather than a null placeholder.
+    getInPrice: event.priceRanges?.[0]?.min ?? null,
+    onSaleDate: event.sales?.public?.startDateTime ?? null,
+    presaleDate: earliestPresaleDate(event),
+  };
+}
+
+/**
+ * Genre browse, served entirely from Ticketmaster.
+ *
+ * Events without a venue are dropped: a card with no city reads as broken, and
+ * Ticketmaster occasionally returns records whose venue is not yet announced.
+ */
+async function searchByGenre(
+  genre: string,
+  city: string | undefined,
+  limit: number
+): Promise<EventSummary[]> {
+  const response = await discoverEvents({ genre, city, size: limit });
+  const events = response._embedded?.events ?? [];
+
+  return events
+    .filter((event) => Boolean(event._embedded?.venues?.[0]))
+    .map(toEventSummaryFromTicketmaster);
 }
 
 export interface ArtistProfile {

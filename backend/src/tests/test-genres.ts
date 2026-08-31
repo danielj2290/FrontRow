@@ -78,3 +78,42 @@ for (const root of musicRoots) {
   }
 }
 console.log("");
+
+// ======================
+// Ticketmaster's music genres — the ones we actually browse by
+// ======================
+// SeatGeek has none, so this is the list that matters. Verifies that the
+// tmName values in frontend/src/utils/genres.ts match reality.
+
+interface TmClassification {
+  segment?: {
+    name: string;
+    _embedded?: { genres?: { id: string; name: string }[] };
+  };
+}
+
+const tmResponse = await fetch(
+  `https://app.ticketmaster.com/discovery/v2/classifications.json?apikey=${requireEnv(
+    "TICKETMASTER_CONSUMER_KEY"
+  )}&size=50`
+);
+
+if (!tmResponse.ok) {
+  console.error(`Ticketmaster /classifications failed: ${tmResponse.status}`);
+} else {
+  const tmData = (await tmResponse.json()) as {
+    _embedded?: { classifications?: TmClassification[] };
+  };
+
+  const music = tmData._embedded?.classifications?.find(
+    (classification) => classification.segment?.name === "Music"
+  );
+
+  console.log("— Ticketmaster genres under segment 'Music' —");
+  const genres = music?.segment?._embedded?.genres ?? [];
+  for (const genre of genres) {
+    console.log(`  ${genre.id.padEnd(22)} ${genre.name}`);
+  }
+  if (genres.length === 0) console.log("  (none returned — check the segment name)");
+  console.log("");
+}

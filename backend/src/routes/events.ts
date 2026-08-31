@@ -62,9 +62,9 @@ router.get("/", async (req, res) => {
 /**
  * GET /api/events/:id
  *
- * ids are prefixed with their provider ("sg-17871645") so the frontend never
- * has to care which API a result came from, and so a future Ticketmaster-backed
- * id cannot collide with a SeatGeek one.
+ * ids are prefixed with their provider — "sg-17871645" for SeatGeek search
+ * results, "tm-..." for Ticketmaster genre results. The prefix is what lets
+ * both providers share one grid, one card and one detail page.
  */
 router.get("/:id", async (req, res) => {
   const match = /^sg-(\d+)$/.exec(req.params.id);
@@ -73,7 +73,7 @@ router.get("/:id", async (req, res) => {
   }
 
   try {
-    const event = await getEventDetail(Number(match[1]));
+    const event = await getEventDetail(match[1]);
     if (!event) {
       return res.status(404).json({ error: "Event not found." });
     }

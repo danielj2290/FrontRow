@@ -46,13 +46,13 @@ interface SeatGeekResponse {
 }
 
 /**
- * Search concert events by artist name, city, and/or performer genre slug.
+ * Search concert events by artist name and/or city. NOT by genre — SeatGeek
+ * has no music genres; see the note in ticketmaster.ts.
  * Maps to the Week 1 checklist item: "search events by artist/city".
  */
 export async function searchEvents(options: {
   artist?: string;
   city?: string;
-  genre?: string;
   perPage?: number;
 }): Promise<SeatGeekResponse> {
   const params = new URLSearchParams({
@@ -65,15 +65,7 @@ export async function searchEvents(options: {
   // "q" does fuzzy text search across performer names
   if (options.artist) params.set("q", options.artist);
   if (options.city) params.set("venue.city", options.city);
-  // Genre on SeatGeek IS a taxonomy — /events documents taxonomies.{name,id,parent_id}
-  // and no genre parameter at all. Passing performers.genres.slug returns 400.
-  // set(), not append(): the docs say multiple taxonomies parameters widen the
-  // search, so adding a genre alongside "concert" would OR them and return MORE
-  // events, not fewer. Replacing the value narrows to the genre, which already
-  // implies a concert.
-  if (options.genre) params.set("taxonomies.name", options.genre);
-
-  const res = await fetch(`${BASE_URL}/events?${params}`);
+const res = await fetch(`${BASE_URL}/events?${params}`);
   if (!res.ok) {
     throw new Error(`SeatGeek API error: ${res.status} ${res.statusText}`);
   }
