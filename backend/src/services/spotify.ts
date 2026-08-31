@@ -23,8 +23,9 @@ const BASE_URL = "https://api.spotify.com/v1";
 // "development mode" no longer receive genres, popularity, or followers —
 // only basic fields (id, name, images, urls). We keep those fields in the
 // type as optional-with-defaults in case Spotify grants them on extended
-// access, but DO NOT depend on them. Genre data for browse pages should
-// come from SeatGeek's performer genres instead.
+// access, but DO NOT depend on them. Genre data comes from TICKETMASTER
+// classifications — SeatGeek performers have no genres field either, and its
+// taxonomy tree contains no music genres at all. See CRITICAL CONTEXT.
 export interface SpotifyArtist {
   id: string;
   name: string;
