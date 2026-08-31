@@ -6,6 +6,7 @@
 
 import "./config/env.js"; // load .env FIRST, before anything reads process.env
 import express from "express";
+import eventsRouter from "./routes/events.js";
 
 const app = express();
 
@@ -25,6 +26,9 @@ app.get("/health", (_req, res) => {
 app.get("/api/health", (_req, res) => {
   res.json({ status: "ok", service: "frontrow-backend", time: new Date().toISOString() });
 });
+
+// Resource routes. One router per resource, mounted under its /api path.
+app.use("/api/events", eventsRouter);
 
 app.get("/", (_req, res) => {
   res.json({ message: "Front Row API — hello world 🎤" });
