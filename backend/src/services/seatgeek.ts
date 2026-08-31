@@ -27,6 +27,9 @@ export interface SeatGeekEvent {
   datetime_local: string;
   venue: { name: string; city: string; state: string };
   performers: { name: string; image: string | null }[];
+  // Genre lives here. Concert events carry the generic "concert" taxonomy plus
+  // narrower ones; parent_id links a child taxonomy to its parent.
+  taxonomies?: { id: number; name: string; parent_id?: number | string | null }[];
   // All optional because our keys currently receive an EMPTY stats object —
   // see the warning at the top of this file.
   stats: {
@@ -62,9 +65,13 @@ export async function searchEvents(options: {
   // "q" does fuzzy text search across performer names
   if (options.artist) params.set("q", options.artist);
   if (options.city) params.set("venue.city", options.city);
-  // SeatGeek indexes genre on the PERFORMER, not the event. Spotify stopped
-  // returning genres for new apps (see spotify.ts), so this is our genre source.
-  if (options.genre) params.set("performers.genres.slug", options.genre);
+  // Genre on SeatGeek IS a taxonomy — /events documents taxonomies.{name,id,parent_id}
+  // and no genre parameter at all. Passing performers.genres.slug returns 400.
+  // set(), not append(): the docs say multiple taxonomies parameters widen the
+  // search, so adding a genre alongside "concert" would OR them and return MORE
+  // events, not fewer. Replacing the value narrows to the genre, which already
+  // implies a concert.
+  if (options.genre) params.set("taxonomies.name", options.genre);
 
   const res = await fetch(`${BASE_URL}/events?${params}`);
   if (!res.ok) {
@@ -98,7 +105,9 @@ export interface SeatGeekPerformer {
   id: number;
   name: string;
   image: string | null;
-  genres?: { name: string; slug: string; primary?: boolean }[];
+  // NOTE: SeatGeek performers do NOT expose genres — the documented Performer
+  // schema is id/image/images/name/primary/score/short_name/slug/type/url only.
+  // Artist genres are derived from their EVENTS taxonomies instead.
 }
 
 /**

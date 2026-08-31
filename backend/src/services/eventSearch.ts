@@ -36,6 +36,9 @@ export interface EventSummary {
   eventDate: string; // ISO-ish local datetime from SeatGeek
   venue: { name: string; city: string; state: string | null };
   getInPrice: number | null; // always null until Week 3 — see note above
+  // Taxonomy names from SeatGeek minus the generic "concert" — this is the only
+  // genre signal either provider gives us.
+  genres: string[];
   onSaleDate: string | null;
   presaleDate: string | null;
 }
@@ -154,6 +157,16 @@ export async function searchConcerts(options: {
 
 // Shared normaliser. Search results and the single-event endpoint both go
 // through it so the frontend only ever renders one shape.
+// Every concert carries the generic "concert" taxonomy; the useful ones are
+// whatever sits alongside it.
+const GENERIC_TAXONOMIES = new Set(["concert", "concerts", "music"]);
+
+function extractGenres(event: SeatGeekEvent): string[] {
+  return (event.taxonomies ?? [])
+    .map((taxonomy) => taxonomy.name)
+    .filter((name) => !GENERIC_TAXONOMIES.has(name.toLowerCase()));
+}
+
 export function toEventSummary(event: SeatGeekEvent, matched?: TicketmasterEvent): EventSummary {
   // The first performer is the headliner on every SeatGeek concert response.
   const headliner = event.performers?.[0];
@@ -169,6 +182,7 @@ export function toEventSummary(event: SeatGeekEvent, matched?: TicketmasterEvent
       city: event.venue.city,
       state: event.venue.state ?? null,
     },
+    genres: extractGenres(event),
     getInPrice: event.stats?.lowest_price ?? null,
     onSaleDate: matched?.sales?.public?.startDateTime ?? null,
     presaleDate: matched ? earliestPresaleDate(matched) : null,
@@ -248,7 +262,10 @@ export async function getArtistProfile(name: string): Promise<ArtistProfile> {
   return {
     name: resolvedName,
     imageUrl: spotify?.images?.[0]?.url ?? performer?.image ?? null,
-    genres: performer?.genres?.map((genre) => genre.name) ?? [],
+    // SeatGeek performers do not expose genres and Spotify stopped returning
+    // them for new apps, so the only genre signal left is the taxonomies on
+    // this artist's own events.
+    genres: [...new Set(events.flatMap((event) => event.genres))].slice(0, 5),
     popularity: spotify?.popularity ?? null,
     setlistFmUrl: `https://www.setlist.fm/search?query=${encodeURIComponent(resolvedName)}`,
     events,

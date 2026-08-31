@@ -10,7 +10,8 @@
     "test:seatgeek": "tsx src/tests/test-seatgeek.ts",
     "test:ticketmaster": "tsx src/tests/test-ticketmaster.ts",
     "test:spotify": "tsx src/tests/test-spotify.ts",
-    "test:apis": "npm run test:seatgeek && npm run test:ticketmaster && npm run test:spotify"
+    "test:apis": "npm run test:seatgeek && npm run test:ticketmaster && npm run test:spotify",
+    "test:genres": "tsx src/tests/test-genres.ts"
   },
   "dependencies": {
     "dotenv": "^16.4.5",

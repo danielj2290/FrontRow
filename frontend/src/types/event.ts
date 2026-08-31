@@ -8,6 +8,8 @@ export interface EventSummary {
   imageUrl: string | null;
   eventDate: string;
   venue: { name: string; city: string; state: string | null };
+  // SeatGeek taxonomy names minus the generic "concert".
+  genres: string[];
   // Always null until the Week 3 bot starts writing price_snapshots.
   getInPrice: number | null;
   onSaleDate: string | null;
