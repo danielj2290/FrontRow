@@ -16,7 +16,8 @@
     "prisma:migrate": "dotenv -e ../.env -- prisma migrate dev",
     "prisma:deploy": "dotenv -e ../.env -- prisma migrate deploy",
     "prisma:studio": "dotenv -e ../.env -- prisma studio",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "track": "tsx src/scripts/track.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",
