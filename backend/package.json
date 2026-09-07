@@ -11,15 +11,23 @@
     "test:ticketmaster": "tsx src/tests/test-ticketmaster.ts",
     "test:spotify": "tsx src/tests/test-spotify.ts",
     "test:apis": "npm run test:seatgeek && npm run test:ticketmaster && npm run test:spotify",
-    "test:genres": "tsx src/tests/test-genres.ts"
+    "test:genres": "tsx src/tests/test-genres.ts",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "dotenv -e ../.env -- prisma migrate dev",
+    "prisma:deploy": "dotenv -e ../.env -- prisma migrate deploy",
+    "prisma:studio": "dotenv -e ../.env -- prisma studio",
+    "postinstall": "prisma generate"
   },
   "dependencies": {
+    "@prisma/client": "^6.19.3",
     "dotenv": "^16.4.5",
-    "express": "^4.21.2"
+    "express": "^4.21.2",
+    "prisma": "^6.19.3"
   },
   "devDependencies": {
     "@types/express": "^4.17.21",
     "@types/node": "^22.10.0",
+    "dotenv-cli": "^11.0.0",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2"
   }

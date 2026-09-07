@@ -1,0 +1,198 @@
+// ======================
+// Front Row — database schema
+// ======================
+// Single source of truth for the database. Everything the app reads or writes
+// goes through Prisma; no raw SQL.
+//
+// DEVIATIONS from the schema sketch in CLAUDE.md are marked "ADDED" below and
+// all exist for one of two reasons: making writes idempotent, or making the
+// nightly bot's queries fast. Nothing was removed.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  // Lives in the .env at the REPO ROOT, one level above /backend, so the CLI
+  // needs dotenv-cli to find it — see the prisma:* scripts in package.json.
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id              String           @id @default(cuid())
+  clerkId         String           @unique
+  email           String           @unique
+  name            String?
+  createdAt       DateTime         @default(now())
+  eventFavorites  EventFavorite[]
+  artistFavorites ArtistFavorite[]
+  priceAlerts     PriceAlert[]
+  emailLogs       EmailLog[]
+  snapshots       PriceSnapshot[]
+}
+
+model Artist {
+  id              String           @id @default(cuid())
+  name            String
+  slug            String           @unique
+  spotifyId       String?
+  imageUrl        String?
+  genre           String?
+  popularityScore Int?
+  createdAt       DateTime         @default(now())
+  events          Event[]
+  artistFavorites ArtistFavorite[]
+}
+
+model Venue {
+  id       String  @id @default(cuid())
+  name     String
+  city     String
+  state    String?
+  country  String
+  capacity Int?
+  events   Event[]
+
+  // ADDED: venues arrive from two providers with no shared id, so name+city is
+  // what we upsert on. Without it, every bot run would create duplicate venues.
+  @@unique([name, city])
+}
+
+model Event {
+  id             String    @id @default(cuid())
+  title          String
+  artistId       String
+  venueId        String
+  eventDate      DateTime
+  onSaleDate     DateTime?
+  presaleDate    DateTime?
+  // ADDED @unique: these are the natural keys we upsert on. An event ingested
+  // twice must update the existing row, not create a second one.
+  seatgeekId     String?   @unique
+  ticketmasterId String?   @unique
+  status         String    @default("on_sale")
+  createdAt      DateTime  @default(now())
+
+  // ADDED: which events the nightly bot actually scrapes. We cannot scrape
+  // every concert on sale, so tracking is opt-in — curated by hand now, and
+  // later driven by favorites and popularity. The index keeps the bot's
+  // "what do I scrape tonight" query cheap as the events table grows.
+  isTracked Boolean @default(false)
+
+  artist      Artist            @relation(fields: [artistId], references: [id])
+  venue       Venue             @relation(fields: [venueId], references: [id])
+  snapshots   PriceSnapshot[]
+  favorites   EventFavorite[]
+  alerts      PriceAlert[]
+  predictions EventPrediction[]
+  emailLogs   EmailLog[]
+
+  @@index([isTracked, eventDate])
+  @@index([eventDate])
+}
+
+model PriceSnapshot {
+  id          String   @id @default(cuid())
+  eventId     String
+  source      String // bot_stubhub | bot_seatgeek | extension | manual
+  marketplace String
+  observedAt  DateTime @default(now())
+
+  // ADDED: the DAY of observation, separate from the exact timestamp.
+  // Idempotency is a hard requirement for the bot — a re-run must not create a
+  // second row for the same night. A timestamp can never enforce that (two runs
+  // are never the same instant), so the unique constraint below keys on the
+  // date. This makes "safe to run twice" a database guarantee rather than
+  // application logic that can race.
+  observedOn DateTime @db.Date
+
+  getInPrice        Float
+  averagePrice      Float?
+  listingCount      Int?
+  isAllInPrice      Boolean @default(false)
+  section           String?
+  quantity          Int?
+  submittedByUserId String?
+
+  event       Event @relation(fields: [eventId], references: [id])
+  submittedBy User? @relation(fields: [submittedByUserId], references: [id])
+
+  @@unique([eventId, marketplace, observedOn])
+  // The Monte Carlo model reads every snapshot for one event in time order;
+  // this index is exactly that query.
+  @@index([eventId, observedAt])
+}
+
+model EventFavorite {
+  id             String   @id @default(cuid())
+  userId         String
+  eventId        String
+  priceThreshold Float?
+  createdAt      DateTime @default(now())
+  user           User     @relation(fields: [userId], references: [id])
+  event          Event    @relation(fields: [eventId], references: [id])
+
+  // ADDED: favouriting the same event twice is a no-op, not a second row.
+  @@unique([userId, eventId])
+}
+
+model ArtistFavorite {
+  id        String   @id @default(cuid())
+  userId    String
+  artistId  String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
+  artist    Artist   @relation(fields: [artistId], references: [id])
+
+  @@unique([userId, artistId])
+}
+
+model PriceAlert {
+  id             String    @id @default(cuid())
+  userId         String
+  eventId        String
+  thresholdPrice Float
+  triggeredAt    DateTime?
+  createdAt      DateTime  @default(now())
+  user           User      @relation(fields: [userId], references: [id])
+  event          Event     @relation(fields: [eventId], references: [id])
+
+  // ADDED: the alert sweep asks "which alerts have not fired yet".
+  @@index([eventId, triggeredAt])
+}
+
+model EmailLog {
+  id        String   @id @default(cuid())
+  userId    String
+  emailType String
+  sentAt    DateTime @default(now())
+  eventId   String?
+  user      User     @relation(fields: [userId], references: [id])
+  event     Event?   @relation(fields: [eventId], references: [id])
+
+  // ADDED: "have we already emailed this user about this today" is the query
+  // that stops a bug turning into a mailbox full of duplicates.
+  @@index([userId, emailType, sentAt])
+}
+
+model EventPrediction {
+  id               String   @id @default(cuid())
+  eventId          String
+  generatedAt      DateTime @default(now())
+  probDrop7d       Float
+  probDrop14d      Float
+  expectedPrice7d  Float
+  p10Price7d       Float
+  p90Price7d       Float
+  expectedPrice14d Float
+  p10Price14d      Float
+  p90Price14d      Float
+  recommendation   String // BUY_NOW | WAIT | ACT_FAST | BUY_SOON | SET_ALERT
+  confidence       String // LOW | MEDIUM | HIGH
+  snapshotCount    Int
+  event            Event    @relation(fields: [eventId], references: [id])
+
+  // ADDED: the event page wants the LATEST prediction for one event.
+  @@index([eventId, generatedAt])
+}
