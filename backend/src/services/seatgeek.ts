@@ -25,6 +25,9 @@ export interface SeatGeekEvent {
   id: number;
   title: string;
   datetime_local: string;
+  // The public event page. The bot navigates straight here instead of
+  // searching, which removes the most fragile step in scraping SeatGeek.
+  url: string;
   venue: { name: string; city: string; state: string };
   performers: { name: string; image: string | null }[];
   // Genre lives here. Concert events carry the generic "concert" taxonomy plus

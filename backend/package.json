@@ -17,17 +17,21 @@
     "prisma:deploy": "dotenv -e ../.env -- prisma migrate deploy",
     "prisma:studio": "dotenv -e ../.env -- prisma studio",
     "postinstall": "prisma generate",
-    "track": "tsx src/scripts/track.ts"
+    "track": "tsx src/scripts/track.ts",
+    "bot": "tsx src/bot/index.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",
     "dotenv": "^16.4.5",
     "express": "^4.21.2",
-    "prisma": "^6.19.3"
+    "node-cron": "^4.6.0",
+    "prisma": "^6.19.3",
+    "puppeteer": "^25.10.0"
   },
   "devDependencies": {
     "@types/express": "^4.17.21",
     "@types/node": "^22.10.0",
+    "@types/node-cron": "^3.0.11",
     "dotenv-cli": "^11.0.0",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2"
