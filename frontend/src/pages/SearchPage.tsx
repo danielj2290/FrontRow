@@ -34,7 +34,7 @@ export function SearchPage() {
         <h1 className="text-3xl font-extrabold tracking-tight sm:text-4xl">
           Know when to buy.
         </h1>
-        <p className="mt-3 max-w-md leading-relaxed text-zinc-400">
+        <p className="mt-3 max-w-md leading-relaxed text-fg-muted">
           {city === ALL_CITIES
             ? "Search concerts anywhere. Price tracking and drop predictions are on the way."
             : `Search concerts in ${city}. Change the city any time from the header.`}

@@ -4,13 +4,53 @@
 @import "tailwindcss";
 
 @theme {
+  /* ==========================================================
+     PALETTE — black and royal purple
+     ==========================================================
+     Every colour in the app comes from a SEMANTIC token here, never from a
+     raw Tailwind colour like zinc-900 or violet-600. That is the whole point:
+     retuning the look is editing this block, not hunting through twenty files.
+
+     Named by ROLE, not by hue. "accent" can become any colour tomorrow and
+     every component keeps working; "purple-600" could not. */
+
+  /* Surfaces, darkest to lightest */
+  --color-canvas: #000000; /* page background */
+  --color-surface: #0d0d10; /* cards, inputs, raised panels */
+  --color-surface-hover: #16161c; /* hover state for anything interactive */
+  --color-line: #26262e; /* borders and 1px grid hairlines */
+
+  /* Text, strongest to weakest. Three levels is enough; a fourth invites
+     inconsistency about which one to reach for. */
+  --color-fg: #fafafa; /* headings, prices, primary content */
+  --color-fg-muted: #a1a1ac; /* venue, supporting detail */
+  --color-fg-subtle: #6b6b78; /* captions, disabled, placeholder */
+
+  /* Royal purple. accent-dim is for tinted fills where a solid purple would
+     shout; accent-fg is what stays readable on top of a solid accent. */
+  --color-accent: #7c3aed;
+  --color-accent-hover: #8b5cf6;
+  --color-accent-dim: #2b1259;
+  --color-accent-fg: #ffffff;
+
+  /* Reserved for meaning, never decoration: a price falling is good news, a
+     price rising is bad news. Nothing else in the UI may use these. */
+  --color-positive: #4ade80;
+  --color-negative: #f87171;
+
+  /* ==========================================================
+     TYPE
+     ========================================================== */
   /* Inter everywhere. The fallback stack matters: if the Google Fonts request
      fails the page still renders in the platform's own UI face rather than
      dropping to Times New Roman. */
   --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
     Roboto, Helvetica, Arial, sans-serif;
 
-  /* DESIGN RULE: no rounded corners anywhere. Zeroing the radius scale at the
+  /* ==========================================================
+     SHAPE
+     ==========================================================
+     DESIGN RULE: no rounded corners anywhere. Zeroing the radius scale at the
      theme level means a stray `rounded-lg` in a component is a no-op rather
      than a visual inconsistency someone has to spot in review. */
   --radius-xs: 0px;
@@ -30,5 +70,14 @@
        them explicitly keeps rendering consistent across browsers. */
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
     -webkit-font-smoothing: antialiased;
+    background-color: var(--color-canvas);
+  }
+
+  /* One focus style for the whole app. Keyboard users get a clearly visible
+     purple ring; mouse users never see it, because :focus-visible only fires
+     for keyboard and programmatic focus. */
+  *:focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
   }
 }

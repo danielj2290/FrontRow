@@ -32,12 +32,12 @@ export function SearchBar({ onSearch, disabled, initialArtist = "" }: SearchBarP
         onChange={(event) => setArtist(event.target.value)}
         placeholder="Search an artist"
         aria-label="Artist"
-        className="min-w-0 flex-1 border border-zinc-800 bg-zinc-900 px-4 py-3 text-base text-zinc-100 placeholder:text-zinc-600 focus:border-zinc-500 focus:outline-none"
+        className="min-w-0 flex-1 border border-line bg-surface px-4 py-3 text-base text-fg placeholder:text-fg-subtle focus:border-accent focus:outline-none"
       />
       <button
         type="submit"
         disabled={disabled}
-        className="bg-green-500 px-8 py-3 text-base font-bold uppercase tracking-wide text-green-950 transition-colors hover:bg-green-400 disabled:cursor-not-allowed disabled:opacity-40"
+        className="bg-accent px-8 py-3 text-base font-bold uppercase tracking-wide text-accent-fg transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-40"
       >
         {disabled ? "Searching" : "Search"}
       </button>

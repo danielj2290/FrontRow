@@ -58,7 +58,7 @@ export function EventResults({
 
   return (
     <>
-      <p className="mb-4 text-sm text-zinc-500">
+      <p className="mb-4 text-sm text-fg0">
         {events.length} {events.length === 1 ? "concert" : "concerts"}
       </p>
       <EventGrid>

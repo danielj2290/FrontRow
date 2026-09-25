@@ -3,6 +3,10 @@ import { useApi } from "../hooks/useApi.ts";
 import type { ArtistProfile } from "../types/event.ts";
 import { EventResults } from "../components/EventResults.tsx";
 import { EmptyState } from "../components/EmptyState.tsx";
+import { Badge } from "../components/ui/Badge.tsx";
+import { ButtonLink } from "../components/ui/Button.tsx";
+import { ImageWithFallback } from "../components/ui/ImageWithFallback.tsx";
+import { BackLink } from "../components/ui/BackLink.tsx";
 
 export function ArtistPage() {
   const { name } = useParams<{ name: string }>();
@@ -13,7 +17,10 @@ export function ArtistPage() {
   if (status === "error") {
     return (
       <div className="mx-auto max-w-6xl px-4 py-10">
-        <EmptyState title="Artist not found" body={error ?? "We could not load this artist."} />
+        <BackLink />
+        <div className="mt-8">
+          <EmptyState title="Artist not found" body={error ?? "We could not load this artist."} />
+        </div>
       </div>
     );
   }
@@ -21,26 +28,23 @@ export function ArtistPage() {
   const loading = status === "loading" || status === "idle";
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-10 sm:py-14">
+    <div className="mx-auto max-w-6xl px-4 py-8 sm:py-12">
+      <BackLink />
+
       {/* Stacked on a phone, photo beside the text from 640px up */}
-      <header className="flex flex-col gap-6 sm:flex-row sm:items-end">
-        <div className="h-40 w-40 shrink-0 overflow-hidden bg-zinc-900">
-          {artist?.imageUrl ? (
-            <img
-              src={artist.imageUrl}
-              alt={artist.name}
-              className="h-full w-full object-cover"
-            />
-          ) : (
-            <div className={`h-full w-full ${loading ? "animate-pulse" : ""} bg-zinc-900`} />
-          )}
-        </div>
+      <header className="mt-8 flex flex-col gap-6 sm:flex-row sm:items-end">
+        <ImageWithFallback
+          src={artist?.imageUrl}
+          alt={artist?.name ?? name ?? "Artist"}
+          fallbackText={artist?.name ?? name ?? ""}
+          className={`h-40 w-40 shrink-0 ${loading ? "animate-pulse" : ""}`}
+        />
 
         <div className="min-w-0">
           {loading ? (
-            <div className="h-10 w-64 animate-pulse bg-zinc-900" />
+            <div className="h-10 w-64 animate-pulse bg-surface" />
           ) : (
-            <h1 className="text-3xl font-extrabold tracking-tight sm:text-4xl">
+            <h1 className="text-3xl font-extrabold tracking-tight text-fg sm:text-4xl">
               {artist?.name ?? name}
             </h1>
           )}
@@ -48,31 +52,25 @@ export function ArtistPage() {
           {artist && artist.genres.length > 0 && (
             <div className="mt-3 flex flex-wrap gap-2">
               {artist.genres.slice(0, 5).map((genre) => (
-                <span
-                  key={genre}
-                  className="border border-zinc-800 px-2.5 py-1 text-xs font-medium uppercase tracking-wide text-zinc-400"
-                >
+                <Badge key={genre} variant="accent">
                   {genre}
-                </span>
+                </Badge>
               ))}
             </div>
           )}
 
           {artist && (
-            <a
-              href={artist.setlistFmUrl}
-              target="_blank"
-              rel="noreferrer noopener"
-              className="mt-4 inline-block text-sm font-medium text-green-400 underline-offset-4 hover:underline"
-            >
-              Past setlists on setlist.fm
-            </a>
+            <div className="mt-5">
+              <ButtonLink to={artist.setlistFmUrl} external variant="secondary" size="sm">
+                Past setlists
+              </ButtonLink>
+            </div>
           )}
         </div>
       </header>
 
-      <section className="mt-12">
-        <h2 className="mb-4 text-sm font-bold uppercase tracking-wider text-zinc-500">
+      <section className="mt-14">
+        <h2 className="mb-4 text-sm font-bold uppercase tracking-widest text-fg-subtle">
           Upcoming shows
         </h2>
         <EventResults

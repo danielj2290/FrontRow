@@ -16,7 +16,7 @@ export function LocationPicker() {
 
   return (
     <form onSubmit={commit} className="flex shrink-0 items-center gap-2">
-      <label htmlFor="location" className="hidden text-xs uppercase tracking-wider text-zinc-500 sm:block">
+      <label htmlFor="location" className="hidden text-xs uppercase tracking-wider text-fg0 sm:block">
         Near
       </label>
 
@@ -31,7 +31,7 @@ export function LocationPicker() {
         // suggestion applies immediately, without also pressing Enter.
         onBlur={() => setCity(draft)}
         placeholder="All cities"
-        className="w-32 border border-zinc-800 bg-zinc-900 px-3 py-1.5 text-sm text-zinc-100 placeholder:text-zinc-600 focus:border-zinc-500 focus:outline-none sm:w-40"
+        className="w-32 border border-line bg-surface px-3 py-1.5 text-sm text-fg placeholder:text-fg-subtle focus:border-accent focus:outline-none sm:w-40"
       />
 
       <datalist id="city-suggestions">
@@ -44,7 +44,7 @@ export function LocationPicker() {
         <button
           type="button"
           onClick={() => setCity(ALL_CITIES)}
-          className="shrink-0 px-2 py-1.5 text-xs font-medium uppercase tracking-wide text-zinc-500 transition-colors hover:text-zinc-200"
+          className="shrink-0 px-2 py-1.5 text-xs font-medium uppercase tracking-wide text-fg0 transition-colors hover:text-fg"
         >
           Clear
         </button>

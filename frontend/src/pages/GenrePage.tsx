@@ -35,7 +35,7 @@ export function GenrePage() {
   return (
     <div className="mx-auto max-w-6xl px-4 py-10 sm:py-14">
       <h1 className="text-3xl font-extrabold tracking-tight sm:text-4xl">{genre.label}</h1>
-      <p className="mt-3 text-zinc-400">
+      <p className="mt-3 text-fg-muted">
         {city === ALL_CITIES
           ? "Popular concerts over the next three months."
           : `Popular concerts in ${city} over the next three months.`}
