@@ -14,6 +14,12 @@ export interface EventSummary {
   getInPrice: number | null;
   onSaleDate: string | null;
   presaleDate: string | null;
+
+  // The same concert as each provider knows it. Both are set when the backend
+  // resolved a cross-provider match; the frontend does not use them yet, but
+  // the mirror must stay faithful to the API shape.
+  seatgeekId: string | null;
+  ticketmasterId: string | null;
 }
 
 export interface EventSearchResponse {

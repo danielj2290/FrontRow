@@ -49,6 +49,14 @@ export interface EventSummary {
   genres: string[];
   onSaleDate: string | null;
   presaleDate: string | null;
+
+  // The SAME concert as each provider knows it. `id` above is the display id
+  // and names whichever provider the record came FROM; these two say which
+  // provider records were resolved to this one real-world show. Both are set
+  // when a cross-provider match succeeded — that is what lets the database
+  // store one row per concert instead of one row per provider.
+  seatgeekId: string | null;
+  ticketmasterId: string | null;
 }
 
 // Lowercase and strip anything that isn't a letter or digit, so "Zach Bryan -
@@ -191,6 +199,11 @@ export function toEventSummary(event: SeatGeekEvent, matched?: TicketmasterEvent
     getInPrice: event.stats?.lowest_price ?? null,
     onSaleDate: matched?.sales?.public?.startDateTime ?? null,
     presaleDate: matched ? earliestPresaleDate(matched) : null,
+
+    seatgeekId: String(event.id),
+    // Set only when the date+city match found this show on Ticketmaster too.
+    // Persisting it is what prevents a duplicate row later.
+    ticketmasterId: matched?.id ?? null,
   };
 }
 
@@ -275,6 +288,12 @@ export function toEventSummaryFromTicketmaster(event: TicketmasterEvent): EventS
     getInPrice: event.priceRanges?.[0]?.min ?? null,
     onSaleDate: event.sales?.public?.startDateTime ?? null,
     presaleDate: earliestPresaleDate(event),
+
+    // Genre browse starts from Ticketmaster, so no SeatGeek record is in hand.
+    // If this concert is later ingested from a SeatGeek search, the match will
+    // fill the gap in on the SAME row rather than creating a second one.
+    seatgeekId: null,
+    ticketmasterId: event.id,
   };
 }
 

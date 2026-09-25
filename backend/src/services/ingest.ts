@@ -69,13 +69,6 @@ export async function ingestEvent(summary: EventSummary): Promise<string> {
     update: { state: summary.venue.state ?? undefined },
   });
 
-  // The provider prefix decides which natural key we upsert on — the two id
-  // spaces are unrelated and must never collide.
-  const isSeatGeek = summary.id.startsWith("sg-");
-  const providerId = summary.id.slice(3);
-
-  const where = isSeatGeek ? { seatgeekId: providerId } : { ticketmasterId: providerId };
-
   const shared = {
     title: summary.title,
     artistId: artist.id,
@@ -85,19 +78,61 @@ export async function ingestEvent(summary: EventSummary): Promise<string> {
     presaleDate: summary.presaleDate ? new Date(summary.presaleDate) : null,
   };
 
-  const event = await prisma.event.upsert({
-    where,
-    create: {
+  // ENTITY RESOLUTION, persisted.
+  //
+  // The same concert exists on both providers under unrelated ids — SeatGeek
+  // "17871645", Ticketmaster "G5dFZ975dZstp" — and neither knows the other.
+  // eventSearch matches them on date + venue city, and EventSummary carries
+  // both ids when that match succeeded.
+  //
+  // We look up by EITHER id, so a concert first seen through search (SeatGeek)
+  // and later through genre browse (Ticketmaster) resolves to the ROW THAT
+  // ALREADY EXISTS instead of a second one.
+  //
+  // Why it matters beyond tidiness: PriceSnapshot hangs off an event row. Two
+  // rows for one concert would scatter its price history across both, and the
+  // Monte Carlo model would compute mu and sigma from half a series while
+  // raising no error at all.
+  const identifiers = [
+    summary.seatgeekId ? { seatgeekId: summary.seatgeekId } : null,
+    summary.ticketmasterId ? { ticketmasterId: summary.ticketmasterId } : null,
+  ].filter((clause): clause is { seatgeekId: string } | { ticketmasterId: string } =>
+    clause !== null
+  );
+
+  const existing =
+    identifiers.length > 0
+      ? await prisma.event.findFirst({ where: { OR: identifiers } })
+      : null;
+
+  if (existing) {
+    const updated = await prisma.event.update({
+      where: { id: existing.id },
+      data: {
+        // Dates and titles genuinely change — shows move and get renamed — so
+        // these are overwritten rather than only filled in.
+        ...shared,
+        // `undefined` means "leave alone" in Prisma; `null` would erase. That
+        // distinction is the whole point here: ingesting this concert from
+        // SeatGeek must never wipe the Ticketmaster id an earlier ingest
+        // learned, and vice versa. Each pass can only ADD what it knows.
+        seatgeekId: summary.seatgeekId ?? undefined,
+        ticketmasterId: summary.ticketmasterId ?? undefined,
+      },
+    });
+
+    return updated.id;
+  }
+
+  const created = await prisma.event.create({
+    data: {
       ...shared,
-      seatgeekId: isSeatGeek ? providerId : null,
-      ticketmasterId: isSeatGeek ? null : providerId,
+      seatgeekId: summary.seatgeekId,
+      ticketmasterId: summary.ticketmasterId,
     },
-    // Dates and titles genuinely change — shows move and get renamed — so these
-    // are overwritten rather than only filled in.
-    update: shared,
   });
 
-  return event.id;
+  return created.id;
 }
 
 /** Opt an event into nightly scraping, or out of it. */
