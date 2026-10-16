@@ -82,6 +82,3 @@ internal-docs/
 claude.md
 
 
-# Puppeteer debug artifacts from failed scrapes
-backend/debug-*.png
-backend/debug-*.html

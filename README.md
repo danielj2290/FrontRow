@@ -1,39 +1,92 @@
 # Front Row
 
-Concert ticket price tracking and drop prediction. Search a show, see what the
-cheapest ticket costs, and get an answer to the only question that matters:
-**buy now, or wait?**
+A concert discovery site that ranks every upcoming tour in America by how
+hyped it is, tells you when the presale opens, and keeps up with what the music
+press is covering.
 
 **Live:** https://frontrow-tickets.vercel.app
 
-Concerts only — no sports, no theater. Built because every existing tool either
-buries music under stadium schedules or shows you a price with no idea whether
-it's a good one.
+Concerts only — no sports, no theater.
 
 ---
 
-## The problem this project is actually solving
+## The problem, and how the project ended up here
 
-SeatGeek and Ticketmaster both have clean, well-documented event APIs. Neither
-will give you **resale prices** without partner-level access — `stats.lowest_price`
-comes back empty, `priceRanges` comes back absent. You can find out that Zach
-Bryan plays Denver in August. You cannot find out what a ticket costs today, and
-you certainly cannot find out what it cost last Tuesday.
+Front Row started as a **ticket price predictor**: track resale prices nightly,
+run a Monte Carlo simulation over the history, and tell you whether to buy now
+or wait.
 
-That killed the obvious version of this product and forced the interesting one:
-**if the price history doesn't exist anywhere, build it.**
+That ran into a wall, in two stages.
 
-Two independent collectors write to the same table:
+**SeatGeek and Ticketmaster both gate resale pricing behind partner-level API
+access.** Event search works fine; `stats.lowest_price` comes back empty and
+`priceRanges` is usually absent. You can learn that Zach Bryan plays Denver in
+August. You cannot learn what a ticket costs today.
 
-1. **A nightly Puppeteer bot** on EC2 visits each tracked event's page on
-   StubHub and SeatGeek, reads the get-in price, and records one snapshot per
-   event per marketplace per night.
-2. **A Chrome extension** lets a real person submit a price from a real browser
-   while they're already shopping — which reaches pages no headless scraper
-   reliably can.
+So the obvious answer was to collect the data instead — a nightly Puppeteer bot
+reading get-in prices off marketplace pages. **That hit DataDome**, commercial
+bot detection, which served a 1.6 KB captcha challenge instead of the event
+page. Two signals were working against it: headless browser fingerprinting, and
+the fact that requests came from an AWS datacenter IP that no real ticket buyer
+browses from.
 
-Every night the dataset gets more valuable and harder to copy. That dataset is
-the product; the UI is how you read it.
+The options were residential proxies (~$50/month to keep losing an arms race),
+stealth plugins (unreliable against DataDome specifically), or accepting that
+the site was saying no.
+
+**So the product changed to match the data that was actually available.** Prices
+are gated. *Popularity is not* — SeatGeek returns a demand score, an
+announcement date and venue capacity on every event, free. Ticketmaster returns
+every presale window. Publishers hand out RSS on purpose.
+
+Front Row now answers **"what is worth going to, and when can I get tickets"**
+instead of **"will this get cheaper"**. Same infrastructure, same APIs, a
+question the data can actually answer.
+
+---
+
+## What it does
+
+**Hype ranking.** Every upcoming tour in the US, scored and ordered.
+
+**Tour grouping.** Olivia Rodrigo playing 30 arenas is one panel saying "30
+dates", not 30 near-identical rows.
+
+**Venue size tiers.** Arenas, theatres and clubs are browsed separately, so a
+club tour competes with other club tours rather than with Beyoncé.
+
+**Presale alerts.** Windows open now or opening within two weeks, ranked.
+
+**A feed.** Just-announced tours, presales, and music headlines from Pitchfork,
+Stereogum, Consequence and Billboard.
+
+**Location filtering.** Everything scopes to a city from the header.
+
+---
+
+## The hype score
+
+Four weighted signals, blended into 0–100:
+
+| Signal | Weight | Source |
+| --- | --- | --- |
+| Demand | 45% | SeatGeek's own event score |
+| Venue size | 25% | Capacity, falling back to venue-name patterns |
+| Freshness | 15% | `announce_date`, decaying linearly over 45 days |
+| Tour length | 15% | Date count, logarithmic |
+
+Demand carries the most because it is the only component derived from real
+behaviour rather than inference. The rest is context that stops a single number
+from being the whole story.
+
+**Every component is returned to the client** and rendered as four bars on the
+tour page. That is deliberate: a ranking nobody can explain is a ranking nobody
+trusts, and being able to say *why* something is third is worth more than a
+slightly better score nobody can interrogate.
+
+Logarithmic tour length because the difference between 1 and 10 dates matters
+far more than between 30 and 40. Linear freshness decay rather than a cliff, so
+an item slides down the feed instead of vanishing overnight.
 
 ---
 
@@ -44,111 +97,75 @@ flowchart TD
     Browser["Browser<br/>React SPA"]
     Vercel["Vercel CDN<br/>static build + /api proxy"]
     API["Express API<br/>AWS EC2 · PM2"]
-    DB[("PostgreSQL<br/>AWS RDS · private")]
-    Bot["Nightly bot<br/>Puppeteer + node-cron"]
-    Ext["Chrome extension"]
-    Ext3["SeatGeek · Ticketmaster · Spotify"]
-    Mkt["StubHub · SeatGeek<br/>event pages"]
+    SG["SeatGeek<br/>events, demand score, announce dates"]
+    TM["Ticketmaster<br/>presales, genres, event links"]
+    SP["Spotify<br/>artist photos"]
+    RSS["Pitchfork · Stereogum<br/>Consequence · Billboard"]
 
     Browser --> Vercel
     Vercel -->|/api/*| API
-    Ext -->|price submissions| API
-    API --> DB
-    API --> Ext3
-    Bot --> Mkt
-    Bot --> DB
-    API -.->|runs in-process| Bot
+    API --> SG
+    API --> TM
+    API --> SP
+    API --> RSS
 ```
 
-The frontend never talks to the API host directly. Vercel rewrites `/api/*`
+The frontend never calls the API host directly. Vercel rewrites `/api/*`
 server-side to EC2, which sidesteps the mixed-content block on an HTTPS page
 calling a plain HTTP origin and means there is no CORS configuration to keep in
 sync. The browser only ever sees one origin.
 
-The database is not on the internet. Its security group allows port 5432 only
-from the EC2 instance's security group, so the API is the sole path to it.
-
----
-
-## Stack
-
-| Layer | Choice | Why |
-| --- | --- | --- |
-| Frontend | React 19, Vite, TypeScript, Tailwind v4, React Router 7 | Static build, served from a CDN |
-| Backend | Node, Express, TypeScript | Long-running process — it also hosts the cron |
-| Database | PostgreSQL on AWS RDS, Prisma | Time-series price data with real constraints |
-| Scraper | Puppeteer, node-cron | Prices are rendered by JavaScript; `fetch` returns an empty shell |
-| Hosting | Vercel + AWS EC2 | Static hosting belongs on a CDN; cron jobs belong on a server |
-| Data | SeatGeek, Ticketmaster, Spotify | Events, genres and on-sale dates, artist photos |
-
----
-
-## What works today
-
-- **Search** concerts by artist, scoped to a city you pick in the header
-- **Event pages** with venue, date, on-sale and presale dates, and buy links to
-  four marketplaces
-- **Artist pages** with photo, genres, and upcoming shows
-- **Genre browse** across seven genres, ranked by relevance over the next three months
-- **Deployed end to end** — every push to `main` ships the frontend automatically
-
-**In progress:** the nightly bot is written and deployed but its selectors are
-not yet verified against live pages, so price fields currently render
-"Price tracking soon". The Monte Carlo model is designed and specified but not
-yet built — it needs snapshot history to be worth running.
-
----
-
-## The prediction model
-
-Once a tracked event has price history, the forecast is a Monte Carlo
-simulation rather than a rule engine:
-
-1. Read every snapshot for the event in time order
-2. Compute daily deltas, then μ and σ of those deltas
-3. Run 10,000 paths forward 14 days, each step adding a `Normal(μ, σ)` sample
-4. At days 7 and 14, take `P(price < today's price)` and the p10 / p50 / p90 percentiles
-
-Rules can't express what this does. Two events priced identically today but with
-different volatility histories deserve different forecasts — a placid one gets a
-narrow cone and a confident recommendation, a jumpy one gets a wide cone and a
-hedge. That falls out of σ for free. It's the same reasoning behind options
-pricing.
-
-Confidence is reported honestly and scales with sample size: fewer than 7
-snapshots is LOW, 22 or more is HIGH.
+There is no database. Every feed is derived from live APIs and cached in
+memory — rankings for 15 minutes, artist photos for 24 hours, headlines for 30.
+A database returns when accounts and favourites do.
 
 ---
 
 ## Engineering decisions worth explaining
 
-**Idempotency is enforced by Postgres, not by application code.**
-`PriceSnapshot` has a `DATE` column separate from its timestamp, with
-`@@unique(eventId, marketplace, observedOn)`. The bot must be safe to run twice,
-and a timestamp can never express that — two runs are never the same instant. A
-check-then-insert in application code would race. Keying the constraint on the
-*day* makes "safe to rerun" a database guarantee.
+**Cross-provider entity resolution.** The same concert exists on SeatGeek as
+`17871645` and on Ticketmaster as `G5dFZ975dZstp`, with no shared key. They are
+matched on **date + normalised venue city** — the only attributes both report
+identically. IDs are unrelated; titles are formatted differently ("Zach Bryan-
+With Heaven On Tour" vs "Zach Bryan"). Where several candidates share a key, a
+title-token overlap breaks the tie. That same matcher is reused three times: to
+attach on-sale dates, to pull genres, and to link each tour date to its
+Ticketmaster page.
 
-**Event IDs carry their provider.** `sg-17871645` and `tm-G5dFZ975dZstp` come
-from unrelated ID spaces. Prefixing them lets one card component and one detail
-page serve results from either provider without the frontend ever knowing which
-API answered.
+**Grouping by headliner, not title.** Titles vary per tour stop, so grouping on
+them would split one tour into several. The first performer is the headliner on
+every SeatGeek concert response, which makes it the only stable grouping key.
 
-**Genre browse runs on Ticketmaster because SeatGeek has no music genres.**
-Dumping SeatGeek's `/taxonomies` endpoint proved it: the entire Concerts branch
-is two nodes, "Concert" and "Music Festivals". Not a wrong parameter — the data
-doesn't exist. Ticketmaster classifies music as Segment > Genre > Sub-Genre, and
-genre is filtered by exact `genreId` rather than by name, since name matching
-also pulls in sub-genres.
+**A tour's size is its biggest room, not its average.** A stadium run with two
+club warm-ups is still a stadium run.
 
-**Scraper selectors are arrays, not strings.** Ticket sites reship markup
-constantly. A list of candidates lets an old selector keep working while a new
-one is added, and every failure saves a screenshot and the page HTML so a broken
-selector is diagnosed from evidence instead of guesswork.
+**Genre comes from Ticketmaster because SeatGeek has none.** Dumping SeatGeek's
+`/taxonomies` endpoint proved it: the entire Concerts branch is two nodes,
+"Concert" and "Music Festivals". Not a wrong parameter — the data does not
+exist. Ticketmaster classifies music as Segment > Genre > Sub-Genre, filtered by
+exact `genreId` rather than by name, since name matching also pulls in
+sub-genres.
 
-**The bot never throws.** Every failure logs and continues. A missed night
-cannot be backfilled — nobody can tell you what a ticket cost last Tuesday — so
-one dead page must never abandon the rest of the run.
+**RSS, not scraping, for headlines.** Publishers hand out a machine-readable
+feed deliberately. Nothing to defeat, nothing to break when a layout changes.
+After DataDome, that distinction is the whole point.
+
+**Caching is layered by how fast each thing changes.** Rankings 15 minutes,
+artist photos 24 hours, headlines 30 minutes. Cache misses are cached too — an
+artist Spotify cannot find will not become findable on the next request.
+
+---
+
+## Stack
+
+| Layer | Choice |
+| --- | --- |
+| Frontend | React 19, Vite, TypeScript, Tailwind v4, React Router 7 |
+| Backend | Node, Express, TypeScript |
+| Hosting | Vercel (static CDN) + AWS EC2 under PM2 |
+| Data | SeatGeek, Ticketmaster, Spotify, publisher RSS |
+
+The backend has exactly two runtime dependencies: `express` and `dotenv`.
 
 ---
 
@@ -159,7 +176,7 @@ Two separate npm projects; there is no root `package.json`.
 ```bash
 git clone https://github.com/danielj2290/FrontRow.git
 cd FrontRow
-cp .env.example .env     # fill in your own API keys
+cp .env.example .env     # add your own API keys
 ```
 
 `.env` lives at the **repo root**, not in `/backend` — one file shared by
@@ -170,13 +187,8 @@ cd backend && npm ci && npm run dev      # API on :3000
 cd frontend && npm ci && npm run dev     # Vite on :5173, proxies /api
 ```
 
-Useful scripts:
-
 ```bash
-npm run test:apis                    # verify all three API integrations
-npm run track -- sg-17871645         # add an event to the nightly scrape list
-npm run bot -- --probe --site seatgeek   # scrape one page, save screenshot + HTML
-npm run prisma:migrate               # run migrations (needs DATABASE_URL)
+npm run test:apis    # verify all three API integrations
 ```
 
 ---
@@ -185,23 +197,26 @@ npm run prisma:migrate               # run migrations (needs DATABASE_URL)
 
 | Endpoint | Description |
 | --- | --- |
-| `GET /api/events?artist=&city=&genre=&limit=` | Search. At least one filter required |
-| `GET /api/events/:id` | One event — accepts `sg-` or `tm-` prefixed IDs |
-| `GET /api/artists/:name` | Artist profile with upcoming shows |
-| `GET /api/health` | Liveness check |
+| `GET /api/news?city=` | The feed: announcements, presales, headlines |
+| `GET /api/tours/hyped?limit=&city=` | Top-ranked tours |
+| `GET /api/tours?size=large\|medium\|small&city=` | Browse by venue size |
+| `GET /api/tours/:id` | One tour, all dates, hype breakdown |
+| `GET /api/tours/presales?city=` | Presale windows |
+| `GET /api/events?artist=&city=&genre=` | Event search |
+| `GET /api/events/:id` | One event — accepts `sg-` or `tm-` ids |
+| `GET /api/artists/:name` | Artist profile and upcoming shows |
 
 ---
 
 ## Roadmap
 
-- [x] Event search, detail, artist and genre pages
-- [x] Deployed frontend and API
-- [x] Database schema and migrations
-- [ ] Nightly bot capturing verified prices
-- [ ] Price history charts and 3-day change
-- [ ] Chrome extension published
-- [ ] Accounts, favorites and price-drop alerts
-- [ ] Monte Carlo forecasts on every event page
+- [x] Hype ranking, tour grouping, venue size tiers
+- [x] Presale tracking
+- [x] Feed with announcements and music headlines
+- [ ] Accounts and favourite artists
+- [ ] Email alerts when a followed artist announces a tour or opens a presale
+- [ ] Personalised ranking based on what you follow
+- [ ] Price history, if a legitimate data source becomes available
 
 ---
 

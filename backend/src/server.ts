@@ -10,7 +10,6 @@ import eventsRouter from "./routes/events.js";
 import artistsRouter from "./routes/artists.js";
 import toursRouter from "./routes/tours.js";
 import newsRouter from "./routes/news.js";
-import { startNightlyJob } from "./jobs/nightly.js";
 
 const app = express();
 
@@ -48,11 +47,4 @@ const PORT = Number(process.env.PORT) || 3000;
 
 app.listen(PORT, () => {
   console.log(`Front Row backend running → http://localhost:${PORT}`);
-
-  // The nightly scrape runs inside this process so PM2 keeps it alive and
-  // restarts it on reboot. Disabled locally: the laptop has no DATABASE_URL and
-  // is not awake at midnight anyway.
-  if (process.env.NODE_ENV === "production") {
-    startNightlyJob();
-  }
 });
