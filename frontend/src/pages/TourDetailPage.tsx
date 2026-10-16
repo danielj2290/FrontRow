@@ -1,6 +1,6 @@
-import { Link, useParams } from "react-router";
+import { useParams } from "react-router";
 import { useApi } from "../hooks/useApi.ts";
-import type { Tour } from "../types/tour.ts";
+import type { Tour, TourDate } from "../types/tour.ts";
 import { EmptyState } from "../components/EmptyState.tsx";
 import { Badge } from "../components/ui/Badge.tsx";
 import { ButtonLink } from "../components/ui/Button.tsx";
@@ -88,32 +88,11 @@ export function TourDetailPage() {
         {/* A list, not a grid: dates are read in order, and a grid would make
             the reader hunt for the chronology. */}
         <ol className="flex flex-col gap-px bg-line">
-          {tour.dates.map((date) => {
-            const time = formatEventTime(date.date);
-            return (
-              <li key={date.eventId}>
-                <Link
-                  to={`/event/${date.eventId}`}
-                  className="flex flex-col gap-1 bg-canvas p-4 transition-colors hover:bg-surface-hover sm:flex-row sm:items-center sm:justify-between"
-                >
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold text-fg">
-                      {formatEventDate(date.date)}
-                      {time ? ` · ${time}` : ""}
-                    </p>
-                    <p className="mt-1 line-clamp-1 text-sm text-fg-muted">
-                      {date.venueName}
-                    </p>
-                  </div>
-
-                  <p className="shrink-0 text-sm text-fg-subtle">
-                    {date.city}
-                    {date.state ? `, ${date.state}` : ""}
-                  </p>
-                </Link>
-              </li>
-            );
-          })}
+          {tour.dates.map((date) => (
+            <li key={date.eventId}>
+              <TourDateRow date={date} />
+            </li>
+          ))}
         </ol>
       </section>
     </div>
@@ -157,6 +136,51 @@ function HypeBreakdown({ tour }: { tour: Tour }) {
         ))}
       </dl>
     </section>
+  );
+}
+
+/**
+ * One date on the tour, linking straight to where you buy it.
+ *
+ * Ticketmaster is preferred when the date+city match found it — it is the
+ * primary seller, so it is where face-value tickets are. SeatGeek is the
+ * fallback and always exists, because the tour pool is built from SeatGeek.
+ *
+ * This leaves the site rather than routing through our own event page. That
+ * is the right call TODAY: our event page adds nothing a buyer needs yet.
+ * Once there are price charts and a forecast on it, this should point inward
+ * instead, and the marketplace link moves onto that page.
+ */
+function TourDateRow({ date }: { date: TourDate }) {
+  const href = date.ticketmasterUrl ?? date.seatgeekUrl;
+  const seller = date.ticketmasterUrl ? "Ticketmaster" : "SeatGeek";
+  const time = formatEventTime(date.date);
+
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noreferrer noopener"
+      className="group flex flex-col gap-2 bg-canvas p-4 transition-colors hover:bg-surface-hover sm:flex-row sm:items-center sm:justify-between"
+    >
+      <div className="min-w-0">
+        <p className="text-sm font-semibold text-fg">
+          {formatEventDate(date.date)}
+          {time ? ` · ${time}` : ""}
+        </p>
+        <p className="mt-1 line-clamp-1 text-sm text-fg-muted">{date.venueName}</p>
+      </div>
+
+      <div className="flex shrink-0 items-center gap-3">
+        <span className="text-sm text-fg-subtle">
+          {date.city}
+          {date.state ? `, ${date.state}` : ""}
+        </span>
+        <span className="text-xs font-semibold uppercase tracking-wide text-accent transition-colors group-hover:text-accent-hover">
+          {seller}
+        </span>
+      </div>
+    </a>
   );
 }
 

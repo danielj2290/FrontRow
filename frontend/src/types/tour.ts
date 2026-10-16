@@ -18,6 +18,8 @@ export interface TourDate {
   state: string | null;
   venueName: string;
   size: VenueSize;
+  seatgeekUrl: string;
+  ticketmasterUrl: string | null;
 }
 
 export interface Tour {

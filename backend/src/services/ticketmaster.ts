@@ -23,6 +23,8 @@ const BASE_URL = "https://app.ticketmaster.com/discovery/v2";
 export interface TicketmasterEvent {
   id: string;
   name: string;
+  /** Direct link to the event page on ticketmaster.com. */
+  url?: string;
   dates: {
     start: { localDate: string; localTime?: string };
   };

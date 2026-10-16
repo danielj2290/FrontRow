@@ -153,6 +153,53 @@ async function withArtistImages(tours: Tour[]): Promise<Tour[]> {
 }
 
 /**
+ * Attach Ticketmaster links to a tour's dates.
+ *
+ * The tour pool is built entirely from SeatGeek, so no date arrives knowing
+ * its Ticketmaster counterpart. One keyword search for the artist returns
+ * their Ticketmaster dates, and the same date + city key used everywhere else
+ * in this codebase resolves which record is which show.
+ *
+ * Only called on a single tour, never on a list: this costs one upstream
+ * request, which is fine when somebody opened a page and wasteful when they
+ * merely scrolled past a card.
+ *
+ * Best effort throughout — an unmatched date keeps its SeatGeek link, which
+ * still sells tickets to the right concert.
+ */
+async function withTicketmasterLinks(tour: Tour): Promise<Tour> {
+  let events: TicketmasterEvent[] = [];
+
+  try {
+    const response = await discoverEvents({ keyword: tour.artist, size: 50, countryCode: "US" });
+    events = response._embedded?.events ?? [];
+  } catch (error) {
+    console.warn(`Ticketmaster lookup failed for ${tour.artist}:`, error);
+    return tour;
+  }
+
+  // date + normalised city — the only pair both providers report identically.
+  const index = new Map<string, TicketmasterEvent>();
+  for (const event of events) {
+    const city = event._embedded?.venues?.[0]?.city?.name;
+    if (!city || !event.url) continue;
+    index.set(`${event.dates.start.localDate}|${normaliseCity(city)}`, event);
+  }
+
+  return {
+    ...tour,
+    dates: tour.dates.map((date) => {
+      const key = `${date.date.split("T")[0]}|${normaliseCity(date.city)}`;
+      return { ...date, ticketmasterUrl: index.get(key)?.url ?? null };
+    }),
+  };
+}
+
+function normaliseCity(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+/**
  * One tour by its slug id.
  *
  * Served from the same cached national ranking rather than a fresh query, so
@@ -163,7 +210,8 @@ export async function getTourById(id: string): Promise<Tour | null> {
   const tours = await getAllTours();
   const tour = tours.find((item) => item.id === id);
   if (!tour) return null;
-  return (await withArtistImages([tour]))[0];
+  const withImages = (await withArtistImages([tour]))[0];
+  return withTicketmasterLinks(withImages);
 }
 
 /** Tours filtered to one venue size, for the browse page. */

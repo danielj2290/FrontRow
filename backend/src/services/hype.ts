@@ -136,6 +136,12 @@ export interface TourDate {
   state: string | null;
   venueName: string;
   size: VenueSize;
+
+  // Where to actually buy. SeatGeek always has one because the tour pool is
+  // built from SeatGeek; Ticketmaster only when the date+city match found
+  // the same show over there.
+  seatgeekUrl: string;
+  ticketmasterUrl: string | null;
 }
 
 export interface Tour {
@@ -206,6 +212,8 @@ export function groupIntoTours(events: SeatGeekEvent[]): Tour[] {
       state: event.venue.state ?? null,
       venueName: event.venue.name,
       size: venueSize(event.venue),
+      seatgeekUrl: event.url,
+      ticketmasterUrl: null,
     }));
 
     // The run's size is its BIGGEST room, not its average. A stadium tour with
