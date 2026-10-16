@@ -8,6 +8,7 @@ import "./config/env.js"; // load .env FIRST, before anything reads process.env
 import express from "express";
 import eventsRouter from "./routes/events.js";
 import artistsRouter from "./routes/artists.js";
+import toursRouter from "./routes/tours.js";
 import { startNightlyJob } from "./jobs/nightly.js";
 
 const app = express();
@@ -32,6 +33,7 @@ app.get("/api/health", (_req, res) => {
 // Resource routes. One router per resource, mounted under its /api path.
 app.use("/api/events", eventsRouter);
 app.use("/api/artists", artistsRouter);
+app.use("/api/tours", toursRouter);
 
 app.get("/", (_req, res) => {
   res.json({ message: "Front Row API" });

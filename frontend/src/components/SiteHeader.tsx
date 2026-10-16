@@ -21,6 +21,16 @@ export function SiteHeader() {
         {/* Horizontally scrollable on a phone rather than wrapping — keeps the
             header one consistent height at every width. */}
         <nav className="-mx-1 flex gap-1 overflow-x-auto pb-2">
+          <NavLink
+            to="/tours"
+            className={({ isActive }) =>
+              `shrink-0 px-3 py-1.5 text-sm font-semibold uppercase tracking-wide transition-colors ${
+                isActive ? "bg-accent text-accent-fg" : "text-accent hover:bg-surface-hover"
+              }`
+            }
+          >
+            Hyped
+          </NavLink>
           {GENRES.map((genre) => (
             <NavLink
               key={genre.slug}

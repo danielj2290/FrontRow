@@ -5,6 +5,7 @@ import { ErrorBoundary } from "./components/ErrorBoundary.tsx";
 import { ScrollRestoration } from "./components/ScrollRestoration.tsx";
 import { HomePage } from "./pages/HomePage.tsx";
 import { SearchPage } from "./pages/SearchPage.tsx";
+import { ToursPage } from "./pages/ToursPage.tsx";
 import { EventDetailPage } from "./pages/EventDetailPage.tsx";
 import { ArtistPage } from "./pages/ArtistPage.tsx";
 import { GenrePage } from "./pages/GenrePage.tsx";
@@ -35,6 +36,7 @@ function App() {
               <Routes>
                 <Route path="/" element={<HomePage />} />
                 <Route path="/search" element={<SearchPage />} />
+                <Route path="/tours" element={<ToursPage />} />
                 <Route path="/event/:id" element={<EventDetailPage />} />
                 <Route path="/artist/:name" element={<ArtistPage />} />
                 <Route path="/genre/:slug" element={<GenrePage />} />

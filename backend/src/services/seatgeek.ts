@@ -28,8 +28,17 @@ export interface SeatGeekEvent {
   // The public event page. The bot navigates straight here instead of
   // searching, which removes the most fragile step in scraping SeatGeek.
   url: string;
-  venue: { name: string; city: string; state: string };
-  performers: { name: string; image: string | null }[];
+  venue: { name: string; city: string; state: string; capacity?: number | null };
+
+  // RANKING SIGNALS. None of these were being read before, which is why the
+  // homepage showed whatever happened to be on tonight instead of what people
+  // actually want. score is SeatGeek own popularity measure (roughly 0-1);
+  // announce_date is when the show was announced, which is what makes a
+  // "just announced" feed possible without scraping anything.
+  score?: number | null;
+  popularity?: number | null;
+  announce_date?: string | null;
+  performers: { name: string; image: string | null; slug?: string; score?: number | null }[];
   // Genre lives here. Concert events carry the generic "concert" taxonomy plus
   // narrower ones; parent_id links a child taxonomy to its parent.
   taxonomies?: { id: number; name: string; parent_id?: number | string | null }[];
@@ -57,6 +66,12 @@ export async function searchEvents(options: {
   artist?: string;
   city?: string;
   perPage?: number;
+  /** SeatGeek sort expression, e.g. "score.desc". */
+  sort?: string;
+  /** 1-based page number, for walking past the per_page cap. */
+  page?: number;
+  /** ISO datetime floor — used to exclude shows that already happened. */
+  afterUtc?: string;
 }): Promise<SeatGeekResponse> {
   const params = new URLSearchParams({
     client_id: requireEnv("SEATGEEK_CLIENT_ID"),
@@ -68,6 +83,10 @@ export async function searchEvents(options: {
   // "q" does fuzzy text search across performer names
   if (options.artist) params.set("q", options.artist);
   if (options.city) params.set("venue.city", options.city);
+  if (options.sort) params.set("sort", options.sort);
+  if (options.page) params.set("page", String(options.page));
+  // Without this, a national ranking happily returns last night shows.
+  if (options.afterUtc) params.set("datetime_utc.gte", options.afterUtc);
 const res = await fetch(`${BASE_URL}/events?${params}`);
   if (!res.ok) {
     throw new Error(`SeatGeek API error: ${res.status} ${res.statusText}`);

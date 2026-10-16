@@ -60,19 +60,26 @@ async function scrapeOne(
 
   try {
     log(`  ${scraper.name}: ${target.title}`);
+
     // domcontentloaded, not networkidle: ticket pages poll continuously, so
-    // waiting for an idle network can hang until the timeout every time.
+    // waiting for an idle network would hang until the timeout every time.
     await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30_000 });
 
-    // Prices are rendered by JavaScript after load, so give the app a moment
-    // to paint before reading the DOM.
-    await new Promise((resolve) => setTimeout(resolve, 4000));
+    // Ticket sites render prices with JavaScript after load, so the DOM at
+    // domcontentloaded is an empty shell. A probe waits longer than a normal
+    // run because when a selector fails we need to be certain the page had
+    // finished painting, not merely that we read it too early.
+    await new Promise((resolve) => setTimeout(resolve, probe ? 10_000 : 4000));
 
     const result = await scraper.extract(page);
 
     if (probe) {
       log(`  probe result: ${JSON.stringify(result)}`);
       log(`  page title: ${await page.title()}`);
+      // Where we ACTUALLY ended up. A search url that quietly redirects to a
+      // homepage looks identical to a selector failure without this line.
+      log(`  landed on:  ${page.url()}`);
+      log(`  requested:  ${url}`);
       await saveDebugArtifacts(page, scraper.name);
       return;
     }

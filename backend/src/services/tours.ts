@@ -1,0 +1,229 @@
+// ======================
+// Hyped tours and presales
+// ======================
+// Builds the three feeds the site now leads with:
+//   - Most hyped tours coming up
+//   - Hyped artist presales happening now
+//   - All hyped tours, split by venue size
+//
+// None of this needs a price. That is the point of the pivot: popularity,
+// announcement dates and presale windows all come back from APIs we are
+// allowed to call, while resale prices do not.
+
+import { searchEvents, type SeatGeekEvent } from "./seatgeek.js";
+import { discoverEvents, pickImage, type TicketmasterEvent } from "./ticketmaster.js";
+import { groupIntoTours, scoreHype, venueSize, type Tour, type VenueSize } from "./hype.js";
+
+// ----------------------------------------------------------------------------
+// Cache
+// ----------------------------------------------------------------------------
+// Building a national ranking costs several upstream requests. Without a cache
+// every homepage visit would repeat them — slow for the visitor and a fast way
+// to burn an API quota. Fifteen minutes is far fresher than the data itself,
+// which changes on the order of days.
+
+const CACHE_TTL_MS = 15 * 60 * 1000;
+
+const cache = new Map<string, { value: unknown; expiresAt: number }>();
+
+async function cached<T>(key: string, build: () => Promise<T>): Promise<T> {
+  const hit = cache.get(key);
+  if (hit && hit.expiresAt > Date.now()) return hit.value as T;
+
+  const value = await build();
+  cache.set(key, { value, expiresAt: Date.now() + CACHE_TTL_MS });
+  return value;
+}
+
+// ----------------------------------------------------------------------------
+// The national pool
+// ----------------------------------------------------------------------------
+
+// SeatGeek caps per_page at 100. Three pages is a wide enough pool to rank
+// nationally without making the first uncached request feel broken.
+const PAGE_SIZE = 100;
+const PAGES = 3;
+
+/**
+ * Fetch a pool of upcoming US concerts to rank.
+ *
+ * `sort=score.desc` is not something SeatGeek documents explicitly, so a
+ * failure is treated as "this parameter is unsupported" and the request is
+ * retried without it. Sorted or not we re-rank locally anyway — sorting server
+ * side only decides whether the pool contains the RIGHT hundred events.
+ */
+async function fetchNationalPool(): Promise<SeatGeekEvent[]> {
+  const afterUtc = new Date().toISOString().split(".")[0] + "Z";
+  const collected: SeatGeekEvent[] = [];
+
+  for (let page = 1; page <= PAGES; page += 1) {
+    try {
+      const response = await searchEvents({
+        perPage: PAGE_SIZE,
+        page,
+        sort: "score.desc",
+        afterUtc,
+      });
+      collected.push(...response.events);
+      if (response.events.length < PAGE_SIZE) break;
+    } catch {
+      // Retry this page unsorted before giving up — see the note above.
+      try {
+        const response = await searchEvents({ perPage: PAGE_SIZE, page, afterUtc });
+        collected.push(...response.events);
+        if (response.events.length < PAGE_SIZE) break;
+      } catch (error) {
+        console.warn(`SeatGeek pool page ${page} failed:`, error);
+        break;
+      }
+    }
+  }
+
+  return collected;
+}
+
+// ----------------------------------------------------------------------------
+// Feeds
+// ----------------------------------------------------------------------------
+
+/** Every upcoming tour, ranked by hype. Cached because it is the same for everyone. */
+export async function getAllTours(): Promise<Tour[]> {
+  return cached("tours:all", async () => groupIntoTours(await fetchNationalPool()));
+}
+
+/**
+ * The homepage headline feed.
+ *
+ * One-off shows are excluded: a single club date is an event, not a tour, and
+ * mixing them in is what made the old homepage read as noise.
+ */
+export async function getHypedTours(limit = 8): Promise<Tour[]> {
+  const tours = await getAllTours();
+  return tours.filter((tour) => tour.dateCount > 1).slice(0, limit);
+}
+
+/** Tours filtered to one venue size, for the browse page. */
+export async function getToursBySize(size: VenueSize, limit = 24): Promise<Tour[]> {
+  const tours = await getAllTours();
+  return tours.filter((tour) => tour.size === size).slice(0, limit);
+}
+
+// ----------------------------------------------------------------------------
+// Presales
+// ----------------------------------------------------------------------------
+
+export interface HypedPresale {
+  id: string;
+  artist: string;
+  title: string;
+  imageUrl: string | null;
+  venueName: string;
+  city: string;
+  eventDate: string;
+  presaleName: string;
+  presaleStart: string;
+  presaleEnd: string | null;
+  /** True when the window is open right now rather than still upcoming. */
+  isLive: boolean;
+  hypeScore: number;
+}
+
+// How far ahead to look. Beyond a couple of weeks a presale is not something
+// anyone can act on yet, and the feed is meant to be actionable.
+const PRESALE_WINDOW_DAYS = 14;
+
+/**
+ * Presales open now or opening shortly, ranked by hype.
+ *
+ * Ticketmaster is the only source for this — SeatGeek does not expose presale
+ * windows at all. Each event can carry several presales (artist, venue, credit
+ * card); we surface the one starting soonest, because that is the deadline
+ * that matters to someone deciding whether to act today.
+ */
+export async function getHypedPresales(limit = 8): Promise<HypedPresale[]> {
+  return cached(`presales:${limit}`, async () => {
+    const now = Date.now();
+    const horizon = now + PRESALE_WINDOW_DAYS * 86_400_000;
+
+    const response = await discoverEvents({ size: 100, countryCode: "US", sort: "relevance,desc" });
+    const events = response._embedded?.events ?? [];
+
+    const presales: HypedPresale[] = [];
+
+    for (const event of events) {
+      const soonest = soonestRelevantPresale(event, now, horizon);
+      if (!soonest) continue;
+
+      const venue = event._embedded?.venues?.[0];
+      const start = new Date(soonest.startDateTime).getTime();
+
+      presales.push({
+        id: `tm-${event.id}`,
+        artist: event._embedded?.attractions?.[0]?.name ?? event.name,
+        title: event.name,
+        imageUrl: pickImage(event),
+        venueName: venue?.name ?? "Venue TBA",
+        city: venue?.city?.name ?? "",
+        eventDate: `${event.dates.start.localDate}T${event.dates.start.localTime ?? "00:00:00"}`,
+        presaleName: soonest.name,
+        presaleStart: soonest.startDateTime,
+        presaleEnd: soonest.endDateTime ?? null,
+        isLive: start <= now,
+        // No SeatGeek score on a Ticketmaster record, so hype here leans on the
+        // room and the announcement — honest about what we actually know.
+        hypeScore: scoreHype({
+          seatGeekScore: null,
+          venue: { name: venue?.name ?? "" },
+          announceDate: null,
+          dateCount: 1,
+        }).score,
+      });
+    }
+
+    // Live windows first, then whichever opens soonest.
+    return presales
+      .sort((a, b) => {
+        if (a.isLive !== b.isLive) return a.isLive ? -1 : 1;
+        return new Date(a.presaleStart).getTime() - new Date(b.presaleStart).getTime();
+      })
+      .slice(0, limit);
+  });
+}
+
+/** The presale on this event that a user could act on soonest, if any. */
+function soonestRelevantPresale(
+  event: TicketmasterEvent,
+  now: number,
+  horizon: number
+): { name: string; startDateTime: string; endDateTime: string | null } | null {
+  const presales = event.sales?.presales ?? [];
+
+  const relevant = presales
+    .filter((presale) => {
+      const start = new Date(presale.startDateTime).getTime();
+      const end = presale.endDateTime ? new Date(presale.endDateTime).getTime() : null;
+      if (Number.isNaN(start)) return false;
+
+      // Either opening within the horizon, or already open and not yet closed.
+      const openingSoon = start > now && start <= horizon;
+      const liveNow = start <= now && (end === null || end > now);
+      return openingSoon || liveNow;
+    })
+    .sort((a, b) => new Date(a.startDateTime).getTime() - new Date(b.startDateTime).getTime());
+
+  const first = relevant[0];
+  if (!first) return null;
+
+  return {
+    name: first.name,
+    startDateTime: first.startDateTime,
+    endDateTime: first.endDateTime ?? null,
+  };
+}
+
+/** Re-exported so routes can validate a size without importing two modules. */
+export function isVenueSize(value: string): value is VenueSize {
+  return value === "large" || value === "medium" || value === "small";
+}
+
+export { venueSize };
