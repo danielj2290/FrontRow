@@ -22,6 +22,16 @@ export function SiteHeader() {
             header one consistent height at every width. */}
         <nav className="-mx-1 flex gap-1 overflow-x-auto pb-2">
           <NavLink
+            to="/feed"
+            className={({ isActive }) =>
+              `shrink-0 px-3 py-1.5 text-sm font-semibold uppercase tracking-wide transition-colors ${
+                isActive ? "bg-accent text-accent-fg" : "text-accent hover:bg-surface-hover"
+              }`
+            }
+          >
+            Feed
+          </NavLink>
+          <NavLink
             to="/tours"
             className={({ isActive }) =>
               `shrink-0 px-3 py-1.5 text-sm font-semibold uppercase tracking-wide transition-colors ${

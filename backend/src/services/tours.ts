@@ -88,6 +88,36 @@ async function fetchNationalPool(): Promise<SeatGeekEvent[]> {
 // ----------------------------------------------------------------------------
 
 /**
+ * Tours announced recently — the "just announced" feed.
+ *
+ * announce_date is the signal nothing else in the app uses, and it is what
+ * makes a news section possible without scraping anybody: SeatGeek tells us
+ * when a run went public.
+ *
+ * Sorted by announcement, not by hype. This section answers "what is new",
+ * and a three week old stadium tour outranking today's news would defeat it.
+ */
+export async function getJustAnnounced(limit = 12, withinDays = 30, city?: string): Promise<Tour[]> {
+  const tours = await getAllTours();
+  const cutoff = Date.now() - withinDays * 86_400_000;
+
+  const recent = tours.filter((tour) => {
+    if (!tour.announceDate) return false;
+    const announced = new Date(tour.announceDate).getTime();
+    if (Number.isNaN(announced) || announced < cutoff) return false;
+    return !city || visitsCity(tour, city);
+  });
+
+  recent.sort(
+    (a, b) =>
+      new Date(b.announceDate as string).getTime() -
+      new Date(a.announceDate as string).getTime()
+  );
+
+  return withArtistImages(recent.slice(0, limit));
+}
+
+/**
  * Does this tour play the given city?
  *
  * Matches on ANY date, not the first: a national tour is relevant to Denver

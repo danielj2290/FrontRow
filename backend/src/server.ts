@@ -9,6 +9,7 @@ import express from "express";
 import eventsRouter from "./routes/events.js";
 import artistsRouter from "./routes/artists.js";
 import toursRouter from "./routes/tours.js";
+import newsRouter from "./routes/news.js";
 import { startNightlyJob } from "./jobs/nightly.js";
 
 const app = express();
@@ -34,6 +35,7 @@ app.get("/api/health", (_req, res) => {
 app.use("/api/events", eventsRouter);
 app.use("/api/artists", artistsRouter);
 app.use("/api/tours", toursRouter);
+app.use("/api/news", newsRouter);
 
 app.get("/", (_req, res) => {
   res.json({ message: "Front Row API" });
