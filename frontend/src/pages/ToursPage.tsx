@@ -3,6 +3,7 @@ import { TourCard } from "../components/TourCard.tsx";
 import { EmptyState } from "../components/EmptyState.tsx";
 import { useApi } from "../hooks/useApi.ts";
 import { SIZE_LABELS, type TourResponse, type VenueSize } from "../types/tour.ts";
+import { ALL_CITIES, useLocation } from "../context/locationContext.ts";
 
 const SIZES: VenueSize[] = ["large", "medium", "small"];
 
@@ -21,13 +22,18 @@ export function ToursPage() {
   const sizeParam = searchParams.get("size");
   const size: VenueSize = isVenueSize(sizeParam) ? sizeParam : "large";
 
-  const { status, data, error } = useApi<TourResponse>(`/api/tours?size=${size}&limit=24`);
+  const { city } = useLocation();
+
+  const query = new URLSearchParams({ size, limit: "24" });
+  if (city !== ALL_CITIES) query.set("city", city);
+
+  const { status, data, error } = useApi<TourResponse>(`/api/tours?${query}`);
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-10 sm:py-14">
       <header>
         <h1 className="text-3xl font-extrabold tracking-tight text-fg sm:text-4xl">
-          Most Hyped Concerts in America
+          {city === ALL_CITIES ? "Most Hyped Concerts in America" : `Most Hyped Concerts in ${city}`}
         </h1>
         <p className="mt-3 max-w-xl leading-relaxed text-fg-muted">
           Every tour on sale, grouped by artist and ranked by hype. Split by
@@ -67,7 +73,7 @@ export function ToursPage() {
         ) : status === "success" && data?.tours.length === 0 ? (
           <EmptyState
             title={`No ${SIZE_LABELS[size].toLowerCase()} tours found`}
-            body="Nothing in this tier right now. Try another size."
+            body={city === ALL_CITIES ? "Nothing in this tier right now. Try another size." : `Nothing in this tier near ${city}. Try another size, or clear the location in the header.`}
           />
         ) : (
           <div className="grid grid-cols-1 gap-px bg-line sm:grid-cols-2 lg:grid-cols-4">

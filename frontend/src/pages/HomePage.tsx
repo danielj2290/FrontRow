@@ -7,12 +7,18 @@ import { EmptyState } from "../components/EmptyState.tsx";
 import { useApi } from "../hooks/useApi.ts";
 import type { PresaleResponse, TourResponse } from "../types/tour.ts";
 import { GENRES } from "../utils/genres.ts";
+import { ALL_CITIES, useLocation } from "../context/locationContext.ts";
 
 export function HomePage() {
   const navigate = useNavigate();
 
-  const tours = useApi<TourResponse>("/api/tours/hyped?limit=8");
-  const presales = useApi<PresaleResponse>("/api/tours/presales?limit=6");
+  const { city } = useLocation();
+
+  // The city goes into the request path, so changing it in the header changes
+  // the url useApi is watching and both feeds refetch on their own.
+  const cityParam = city === ALL_CITIES ? "" : `&city=${encodeURIComponent(city)}`;
+  const tours = useApi<TourResponse>(`/api/tours/hyped?limit=8${cityParam}`);
+  const presales = useApi<PresaleResponse>(`/api/tours/presales?limit=6${cityParam}`);
 
   function handleSearch(artist: string) {
     if (!artist.trim()) return;
@@ -27,7 +33,7 @@ export function HomePage() {
 
       <div className="mx-auto max-w-6xl px-4">
         <Section
-          title="Most Hyped Tours Coming Up"
+          title={city === ALL_CITIES ? "Most Hyped Tours Coming Up" : `Most Hyped Tours Coming to ${city}`}
           subtitle="Ranked by demand, venue size, how recently they were announced, and how many dates they are playing"
           action={{ label: "See all tours", to: "/tours" }}
         >
@@ -46,7 +52,7 @@ export function HomePage() {
         </Section>
 
         <Section
-          title="Hyped Artist Presales Right Now"
+          title={city === ALL_CITIES ? "Hyped Artist Presales Right Now" : `Hyped Presales Near ${city}`}
           subtitle="Presale windows open now or opening in the next two weeks — the ones you can still act on"
         >
           {presales.status === "error" ? (
@@ -57,7 +63,7 @@ export function HomePage() {
           ) : presales.status === "success" && presales.data?.presales.length === 0 ? (
             <EmptyState
               title="No presales in the next two weeks"
-              body="Nothing is opening soon. Check back — announcements come in waves."
+              body={city === ALL_CITIES ? "Nothing is opening soon. Check back — announcements come in waves." : `Nothing opening near ${city}. Clear the location in the header to see every presale.`}
             />
           ) : (
             <div className="grid grid-cols-1 gap-px bg-line sm:grid-cols-2">

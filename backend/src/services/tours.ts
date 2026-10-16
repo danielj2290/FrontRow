@@ -87,6 +87,17 @@ async function fetchNationalPool(): Promise<SeatGeekEvent[]> {
 // Feeds
 // ----------------------------------------------------------------------------
 
+/**
+ * Does this tour play the given city?
+ *
+ * Matches on ANY date, not the first: a national tour is relevant to Denver
+ * if it stops in Denver, regardless of where it opens.
+ */
+function visitsCity(tour: Tour, city: string): boolean {
+  const target = normaliseCity(city);
+  return tour.dates.some((date) => normaliseCity(date.city) === target);
+}
+
 /** Every upcoming tour, ranked by hype. Cached because it is the same for everyone. */
 export async function getAllTours(): Promise<Tour[]> {
   return cached("tours:all", async () => groupIntoTours(await fetchNationalPool()));
@@ -98,9 +109,17 @@ export async function getAllTours(): Promise<Tour[]> {
  * One-off shows are excluded: a single club date is an event, not a tour, and
  * mixing them in is what made the old homepage read as noise.
  */
-export async function getHypedTours(limit = 8): Promise<Tour[]> {
+export async function getHypedTours(limit = 8, city?: string): Promise<Tour[]> {
   const tours = await getAllTours();
-  return withArtistImages(tours.filter((tour) => tour.dateCount > 1).slice(0, limit));
+
+  // Single-date shows are excluded nationally — a one-off club night is an
+  // event, not a tour. With a city set that filter is dropped: a one-night
+  // stand in YOUR city is exactly what you want to know about.
+  const relevant = city
+    ? tours.filter((tour) => visitsCity(tour, city))
+    : tours.filter((tour) => tour.dateCount > 1);
+
+  return withArtistImages(relevant.slice(0, limit));
 }
 
 /**
@@ -215,9 +234,16 @@ export async function getTourById(id: string): Promise<Tour | null> {
 }
 
 /** Tours filtered to one venue size, for the browse page. */
-export async function getToursBySize(size: VenueSize, limit = 24): Promise<Tour[]> {
+export async function getToursBySize(
+  size: VenueSize,
+  limit = 24,
+  city?: string
+): Promise<Tour[]> {
   const tours = await getAllTours();
-  return withArtistImages(tours.filter((tour) => tour.size === size).slice(0, limit));
+  const matching = tours.filter(
+    (tour) => tour.size === size && (!city || visitsCity(tour, city))
+  );
+  return withArtistImages(matching.slice(0, limit));
 }
 
 // ----------------------------------------------------------------------------
@@ -252,12 +278,19 @@ const PRESALE_WINDOW_DAYS = 14;
  * card); we surface the one starting soonest, because that is the deadline
  * that matters to someone deciding whether to act today.
  */
-export async function getHypedPresales(limit = 8): Promise<HypedPresale[]> {
-  return cached(`presales:${limit}`, async () => {
+export async function getHypedPresales(limit = 8, city?: string): Promise<HypedPresale[]> {
+  // The city is part of the key — without it a Denver visitor would be served
+  // whatever the previous visitor cached.
+  return cached(`presales:${limit}:${city ?? "all"}`, async () => {
     const now = Date.now();
     const horizon = now + PRESALE_WINDOW_DAYS * 86_400_000;
 
-    const response = await discoverEvents({ size: 100, countryCode: "US", sort: "relevance,desc" });
+    const response = await discoverEvents({
+      size: 100,
+      countryCode: "US",
+      sort: "relevance,desc",
+      city,
+    });
     const events = response._embedded?.events ?? [];
 
     const presales: HypedPresale[] = [];

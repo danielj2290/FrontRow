@@ -17,6 +17,14 @@ const router = Router();
 
 const MAX_LIMIT = 48;
 
+// An empty or whitespace-only city means "everywhere", which is also what the
+// frontend sends when the visitor clears the picker.
+function parseCity(raw: unknown): string | undefined {
+  if (typeof raw !== "string") return undefined;
+  const trimmed = raw.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
 function parseLimit(raw: unknown, fallback: number): number {
   const parsed = Number(raw);
   if (!Number.isFinite(parsed)) return fallback;
@@ -29,7 +37,7 @@ function parseLimit(raw: unknown, fallback: number): number {
  */
 router.get("/hyped", async (req, res) => {
   try {
-    const tours = await getHypedTours(parseLimit(req.query.limit, 8));
+    const tours = await getHypedTours(parseLimit(req.query.limit, 8), parseCity(req.query.city));
     res.json({ count: tours.length, tours });
   } catch (error) {
     console.error("GET /api/tours/hyped failed:", error);
@@ -43,7 +51,7 @@ router.get("/hyped", async (req, res) => {
  */
 router.get("/presales", async (req, res) => {
   try {
-    const presales = await getHypedPresales(parseLimit(req.query.limit, 8));
+    const presales = await getHypedPresales(parseLimit(req.query.limit, 8), parseCity(req.query.city));
     res.json({ count: presales.length, presales });
   } catch (error) {
     console.error("GET /api/tours/presales failed:", error);
@@ -64,7 +72,7 @@ router.get("/", async (req, res) => {
   }
 
   try {
-    const tours = await getToursBySize(size, parseLimit(req.query.limit, 24));
+    const tours = await getToursBySize(size, parseLimit(req.query.limit, 24), parseCity(req.query.city));
     res.json({ count: tours.length, size, tours });
   } catch (error) {
     console.error("GET /api/tours failed:", error);
