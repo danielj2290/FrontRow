@@ -13,6 +13,7 @@
 import { searchEvents, type SeatGeekEvent } from "./seatgeek.js";
 import { discoverEvents, pickImage, type TicketmasterEvent } from "./ticketmaster.js";
 import { groupIntoTours, scoreHype, venueSize, type Tour, type VenueSize } from "./hype.js";
+import { searchArtist } from "./spotify.js";
 
 // ----------------------------------------------------------------------------
 // Cache
@@ -99,13 +100,76 @@ export async function getAllTours(): Promise<Tour[]> {
  */
 export async function getHypedTours(limit = 8): Promise<Tour[]> {
   const tours = await getAllTours();
-  return tours.filter((tour) => tour.dateCount > 1).slice(0, limit);
+  return withArtistImages(tours.filter((tour) => tour.dateCount > 1).slice(0, limit));
+}
+
+/**
+ * Fill in artist photos from Spotify.
+ *
+ * SeatGeek returns no performer image on the national pool query, so tours
+ * would render as text-only fallbacks. Spotify has a photo for essentially
+ * every touring artist, at far higher resolution than SeatGeek carries.
+ *
+ * Only ever called on the SLICE being returned — one lookup per artist, so
+ * enriching the whole national pool would be hundreds of calls for images
+ * nobody is going to see. Failures are per-artist and silent: a missing photo
+ * falls back to the artist name, which is a cosmetic gap, not an error.
+ */
+// Artist photos keyed by name, separately from the tour cache and for far
+// longer — an artist photo changes on the order of years, while a ranking
+// changes daily. Without this, every homepage visit would fire a Spotify
+// lookup per card even though the tours themselves came from cache.
+const ARTIST_IMAGE_TTL_MS = 24 * 60 * 60 * 1000;
+const artistImages = new Map<string, { url: string | null; expiresAt: number }>();
+
+async function artistImage(name: string): Promise<string | null> {
+  const hit = artistImages.get(name);
+  if (hit && hit.expiresAt > Date.now()) return hit.url;
+
+  const artist = await searchArtist(name);
+  const url = artist?.images?.[0]?.url ?? null;
+
+  // A miss is cached too. An artist Spotify cannot find will not be findable
+  // on the next request either, and retrying every time is the expensive case.
+  artistImages.set(name, { url, expiresAt: Date.now() + ARTIST_IMAGE_TTL_MS });
+  return url;
+}
+
+async function withArtistImages(tours: Tour[]): Promise<Tour[]> {
+  const results = await Promise.allSettled(
+    tours.map(async (tour) => {
+      if (tour.imageUrl) return tour.imageUrl;
+      return artistImage(tour.artist);
+    })
+  );
+
+  return tours.map((tour, index) => {
+    const result = results[index];
+    return {
+      ...tour,
+      imageUrl: result.status === "fulfilled" ? result.value : tour.imageUrl,
+    };
+  });
+}
+
+/**
+ * One tour by its slug id.
+ *
+ * Served from the same cached national ranking rather than a fresh query, so
+ * opening a tour costs nothing extra and the dates shown are exactly the ones
+ * the card was ranked on.
+ */
+export async function getTourById(id: string): Promise<Tour | null> {
+  const tours = await getAllTours();
+  const tour = tours.find((item) => item.id === id);
+  if (!tour) return null;
+  return (await withArtistImages([tour]))[0];
 }
 
 /** Tours filtered to one venue size, for the browse page. */
 export async function getToursBySize(size: VenueSize, limit = 24): Promise<Tour[]> {
   const tours = await getAllTours();
-  return tours.filter((tour) => tour.size === size).slice(0, limit);
+  return withArtistImages(tours.filter((tour) => tour.size === size).slice(0, limit));
 }
 
 // ----------------------------------------------------------------------------

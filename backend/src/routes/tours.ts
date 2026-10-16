@@ -10,6 +10,7 @@ import {
   getToursBySize,
   getHypedPresales,
   isVenueSize,
+  getTourById,
 } from "../services/tours.js";
 
 const router = Router();
@@ -68,6 +69,25 @@ router.get("/", async (req, res) => {
   } catch (error) {
     console.error("GET /api/tours failed:", error);
     res.status(502).json({ error: "Could not build the tour ranking right now." });
+  }
+});
+
+/**
+ * GET /api/tours/:id
+ *
+ * Declared LAST so it cannot shadow /hyped and /presales — Express matches in
+ * definition order, and ":id" would happily swallow both.
+ */
+router.get("/:id", async (req, res) => {
+  try {
+    const tour = await getTourById(req.params.id);
+    if (!tour) {
+      return res.status(404).json({ error: "Tour not found." });
+    }
+    res.json(tour);
+  } catch (error) {
+    console.error(`GET /api/tours/${req.params.id} failed:`, error);
+    res.status(502).json({ error: "Could not load that tour right now." });
   }
 });
 

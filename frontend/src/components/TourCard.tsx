@@ -22,7 +22,7 @@ export function TourCard({ tour }: { tour: Tour }) {
 
   return (
     <Link
-      to={`/artist/${encodeURIComponent(tour.artist)}`}
+      to={`/tour/${tour.id}`}
       className="group block bg-canvas transition-colors hover:bg-surface-hover"
     >
       <div className="relative">
